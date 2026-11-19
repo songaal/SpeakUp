@@ -26,6 +26,7 @@ wrangler.jsonc           Cloudflare Worker (static assets only, custom domain sp
 
 ## Views (app.js)
 `library` → tap card → `info` (stats tiles: sentences / words / 연습한 문장 = total scored attempts for this dialogue; Start / Resume buttons right under the stats; full text list with best % per line) → `player`.
+- Library card: title + `N문장 · 연습 N문장 · 마지막 <date>` (or 아직 연습 안 함). No "완벽 x/N" and no progress bar (owner removed them).
 - Library: edit mode (✎ 편집) shows checkboxes (multi-delete with in-page confirm modal, or **export only the selected** ones) and ▲▼ reorder buttons. `＋ 새 대화` opens the editor sheet; 가져오기 (file input, .md/.json, many files, **appends**); 내보내기 (sheet with MD/JSON tabs, Copy, Save file).
 - 📋 프롬프트: popover with `CONVERT_PROMPT`; opening it copies to clipboard; closes on outside pointerdown, window blur, Esc, or toggling.
 - Info: ✎ 수정 opens the editor with that dialogue as md; saving with extra `---` sections inserts them as new dialogues after it. The editor also has 삭제.
@@ -53,7 +54,8 @@ A word of the current line is shown only if: said correctly (live or in the last
 | `speakup.lib.v3` | `[{id, title, lines:[{spk, en, ko}], created, updated}]` — array order = list order |
 | `speakup.best.v3` | `{"<dialogId>|<english sentence>": bestScore}` — keyed by sentence text so reordering lines keeps scores |
 | `speakup.pos.v3` | `{dialogId: lastLineIndex}` (Resume button) |
-| `speakup.count.v3` | `{dialogId: n}` — +1 on every scored attempt (retries count too); shown as 연습한 문장 on the info page |
+| `speakup.count.v3` | `{dialogId: n}` — +1 on every scored attempt (retries count too); shown as 연습한 문장 on the info page and in the library card |
+| `speakup.last.v3` | `{dialogId: ms}` — time of the last scored attempt; library card shows it as 오늘 / 어제 / N일 전 / M월 D일 (`relDate`) |
 | `speakup.auto.v3`, `speakup.pause.v3` | settings |
 First run seeds the sample dialogue (`SAMPLE_MD`) — the same in every browser, it is not the owner's data. Keep the sample generic: no work/company content (owner asked to replace the old team-meeting sample). On load, an unedited old sample (matched by `OLD_SAMPLE`) is swapped for the current one. If storage throws, a warning banner tells the user to export.
 Data is per browser **and per origin** (artifact vs localhost vs kappy.app are separate). Lost on clearing site data, private mode, Safari's 7-day eviction of non-home-screen sites. Export is the backup. If cross-device sync is ever wanted, it needs a server (e.g. Cloudflare KV/D1) — not built.
@@ -80,9 +82,10 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.4.0 — 2026/11/19**
+- **Current version: v3.5.0 — 2026/11/19**
 
 ## Changelog
+- v3.5.0 (2026/11/19): library cards show practised-sentence count and last practice date (new `speakup.last.v3`) instead of "완벽 x/N" and its progress bar. Fix: editor/export sheets scroll on short screens (Save button was pushed off-screen when the viewport or keyboard left little height).
 - v3.4.0 (2026/11/19): sample replaced — "카페에서 커피 주문하기" (Barista/Customer, 17 lines) instead of the team-meeting script; browsers still holding the unedited old sample get it swapped on load. Prompt example switched to café lines. Tokenizer reads `$8.50`/`$8` as dollars/cents.
 - v3.3.0 (2026/11/19): compact player dock — removed 🐢 천천히, chips on one non-wrapping row with shorter labels, smaller mic (60px) / nav buttons / result pill, dropped the hint and engine text lines (mic tooltip + `data-engine` instead).
 - v3.2.0 (2026/11/19): edit mode gains "N개 내보내기" — export only the selected dialogues (same MD/JSON sheet; a single dialogue gets its title in the filename).

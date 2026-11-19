@@ -3,7 +3,7 @@ import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, a
 import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT } from "./content.js";
 
 /* ================= store (localStorage) ================= */
-const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3", count: "speakup.count.v3", auto: "speakup.auto.v3", pause: "speakup.pause.v3" };
+const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3", count: "speakup.count.v3", last: "speakup.last.v3", auto: "speakup.auto.v3", pause: "speakup.pause.v3" };
 let storageOK = true;
 try { localStorage.setItem("speakup.probe", "1"); localStorage.removeItem("speakup.probe"); } catch (e) { storageOK = false; }
 const ls = {
@@ -22,12 +22,18 @@ else {   // swap the pre-v3.4.0 sample (team meeting) for the new one if it is s
 let best = ls.get(K.best, {});                 // "dialogId|english sentence" → best score (survives line reordering/edits)
 let posMap = ls.get(K.pos, {});                // dialogId → last sentence index
 let countMap = ls.get(K.count, {});            // dialogId → total sentences practised (every scored attempt)
+let lastMap = ls.get(K.last, {});              // dialogId → timestamp (ms) of the last scored attempt
 let autoNext = ls.get(K.auto, true);
 const PAUSES = [2000, 4000, 7000, 0];          // 0 = manual stop only
 let pauseMs = ls.get(K.pause, 4000);
 const saveLib = () => ls.set(K.lib, lib);
 const bestOf = (d, l) => best[d.id + "|" + l.en];
-const doneCount = d => d.lines.filter(l => bestOf(d, l) === 100).length;
+function relDate(ms) {                         // 오늘 / 어제 / N일 전 (≤6) / M월 D일 / YYYY. M. D.
+  const d = new Date(ms), now = new Date(), day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  const diff = Math.round((day(now) - day(d)) / 864e5);
+  if (diff <= 0) return "오늘"; if (diff === 1) return "어제"; if (diff < 7) return `${diff}일 전`;
+  return d.getFullYear() === now.getFullYear() ? `${d.getMonth() + 1}월 ${d.getDate()}일` : `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
+}
 
 /* ================= helpers ================= */
 const $ = id => document.getElementById(id);
@@ -66,12 +72,11 @@ function renderLib() {
     $("addSample").onclick = () => addDialogs(parseMd(SAMPLE_MD));
   } else {
     el.innerHTML = lib.map((d, i) => {
-      const n = d.lines.length, done = doneCount(d), sel = selected.has(d.id);
+      const n = d.lines.length, cnt = countMap[d.id] || 0, last = lastMap[d.id], sel = selected.has(d.id);
       return `<div class="dcard ${sel ? "sel" : ""}" data-id="${d.id}">
         <span class="chk">${sel ? "✓" : ""}</span>
         <div class="dmain"><div class="dt">${esc(d.title)}</div>
-          <div class="dm">${n}문장 · 완벽 ${done}/${n}</div>
-          <div class="pb"><i style="width:${n ? done / n * 100 : 0}%"></i></div></div>
+          <div class="dm">${n}문장 · ${cnt ? `연습 ${cnt}문장` + (last ? ` · 마지막 ${relDate(last)}` : "") : "아직 연습 안 함"}</div></div>
         <div class="mv"><button data-mv="-1" ${i === 0 ? "disabled" : ""} aria-label="위로">▲</button><button data-mv="1" ${i === lib.length - 1 ? "disabled" : ""} aria-label="아래로">▼</button></div>
         <span class="chev">›</span></div>`;
     }).join("");
@@ -98,8 +103,8 @@ $("delSelBtn").onclick = async () => {
   if (!selected.size) return;
   if (!await ask(`대화 ${selected.size}개를 삭제할까요? 되돌릴 수 없어요.`)) return;
   const n = selected.size;
-  lib = lib.filter(d => !selected.has(d.id)); selected.forEach(id => { delete posMap[id]; delete countMap[id]; }); selected.clear();
-  saveLib(); ls.set(K.pos, posMap); ls.set(K.count, countMap); editing = false; renderLib(); toast(`${n}개 삭제했어요`);
+  lib = lib.filter(d => !selected.has(d.id)); selected.forEach(id => { delete posMap[id]; delete countMap[id]; delete lastMap[id]; }); selected.clear();
+  saveLib(); ls.set(K.pos, posMap); ls.set(K.count, countMap); ls.set(K.last, lastMap); editing = false; renderLib(); toast(`${n}개 삭제했어요`);
 };
 function addDialogs(ds) { const t = Date.now(); ds.forEach((d, i) => lib.push(newDialog(d, t + i))); saveLib(); renderLib(); }
 
@@ -144,7 +149,7 @@ $("edSave").onclick = () => {
 };
 $("edDelete").onclick = async () => {
   if (!await ask(`"${dlg.title}" 대화를 삭제할까요?`)) return;
-  lib = lib.filter(d => d !== dlg); delete posMap[dlg.id]; delete countMap[dlg.id]; saveLib(); ls.set(K.pos, posMap); ls.set(K.count, countMap);
+  lib = lib.filter(d => d !== dlg); delete posMap[dlg.id]; delete countMap[dlg.id]; delete lastMap[dlg.id]; saveLib(); ls.set(K.pos, posMap); ls.set(K.count, countMap); ls.set(K.last, lastMap);
   closeEditor(); goLibrary(); toast("삭제했어요");
 };
 
@@ -326,6 +331,7 @@ function evaluate() {
   const heardHTML = `<span class="label">YOU SAID</span>` + r.heard.map(h => `<span class="h ${h.st}">${esc(h.w)}</span>`).join(" ");
   attempts[idx] = { st: r.st, said: r.said, score: r.score, heardHTML };
   countMap[dlg.id] = (countMap[dlg.id] || 0) + 1; ls.set(K.count, countMap);
+  lastMap[dlg.id] = Date.now(); ls.set(K.last, lastMap);
   const key = dlg.id + "|" + lines[idx].en; if (best[key] == null || r.score > best[key]) { best[key] = r.score; ls.set(K.best, best); }
   rerenderLine(idx);
   const [cls, title] = r.score === 100 ? ["good", "Perfect! 🎉"] : r.score >= 80 ? ["good", "Great!"] : r.score >= 50 ? ["mid", "Good try!"] : ["low", "One more time!"];

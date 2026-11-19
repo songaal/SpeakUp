@@ -37,7 +37,7 @@
   .dcard.sel .chk{background:var(--blue);border-color:var(--blue-d)}
   .dmain{flex:1;min-width:0}
   .dt{font-weight:900;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .dm{font-weight:700;font-size:13px;color:var(--muted);margin-top:2px}
+  .dm{font-weight:700;font-size:13px;color:var(--muted);margin-top:3px}
   .pb{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:8px}
   .pb i{display:block;height:100%;background:var(--green);border-radius:99px}
   .chev{font-size:24px;font-weight:900;color:var(--faint)}
@@ -132,11 +132,11 @@
   body.v-play .toast{bottom:calc(130px + env(safe-area-inset-bottom))}
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:flex-end;justify-content:center;z-index:20}
   .overlay.show{display:flex}
-  .sheet{background:#fff;width:100%;max-width:680px;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:94vh;display:flex;flex-direction:column}
+  .sheet{background:#fff;width:100%;max-width:680px;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:94vh;max-height:94dvh;display:flex;flex-direction:column;overflow-y:auto}
   .sheet h2{margin:0 0 6px;font-size:20px;font-weight:900}
   .sheet p{margin:0 0 10px;color:var(--muted);font-weight:700;font-size:13px;line-height:1.5}
   .sheet pre{margin:0 0 10px;background:var(--soft);border-radius:10px;padding:8px 10px;font-size:12px;font-weight:700;color:var(--ink);white-space:pre-wrap;line-height:1.5}
-  .sheet textarea{flex:1;width:100%;min-height:46vh;border:2px solid var(--line);border-radius:14px;padding:12px;font:inherit;font-size:14px;font-weight:700;color:var(--ink);resize:none;line-height:1.55}
+  .sheet textarea{flex:1 1 auto;width:100%;min-height:clamp(140px,40dvh,520px);border:2px solid var(--line);border-radius:14px;padding:12px;font:inherit;font-size:14px;font-weight:700;color:var(--ink);resize:none;line-height:1.55}
   .sheet textarea:focus{outline:none;border-color:var(--blue)}
   .sheet .btns{display:flex;gap:10px;margin-top:12px}
   .sheet .btns .btn{flex:1}
