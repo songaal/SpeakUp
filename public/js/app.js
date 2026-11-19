@@ -243,7 +243,7 @@ function openPlayer(at) {
 $("backBtn").onclick = () => { if (listening) stopListening(true); clearTimeout(autoTimer); try { speechSynthesis.cancel(); } catch (e) {} showView("info"); renderInfo(); };
 
 // A word is visible if: not the current line, already scored (right ones green, wrong ones red with what was heard
-// underneath, missed ones struck through — the answer is always shown after an attempt), said right live, or hint level 2.
+// underneath, missed ones too — the answer word is always shown after an attempt), said right live, or hint level 2.
 function wordView(i, k) {
   const att = attempts[i], cur = i === idx;
   let st = att ? att.st[k] : "";

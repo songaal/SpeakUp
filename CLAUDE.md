@@ -33,7 +33,7 @@ wrangler.jsonc           Cloudflare Worker (static assets only, custom domain sp
 - Player: vertical script. Current line centred (big, Korean + masked English word slots + "heard" box); previous lines above show English (revealed) + their score this session; next lines below show Korean only, faded. Free swipe/wheel scroll with CSS `scroll-snap`; when scrolling settles (`onScrollSettle`, 130 ms debounce) the line nearest the centre becomes current. Programmatic scrolls set `progScrollUntil` so they don't re-trigger selection.
 
 ## Masking / hint rules (player)
-Before/while speaking, a word of the current line is a blank slot (`.w.hid`) until it is said correctly (live → green). After an attempt is scored **every answer word is shown**: correct = green, wrong = red with what was heard underneath, missed = grey strikethrough (owner wants the right answer visible in place of the mistake). Tapping the mic again clears the attempt and re-blanks the line. 💡 cycles: 0 blanks → 1 first letter on blanks only → 2 show answer. Hint resets to 0 when the line changes.
+Before/while speaking, a word of the current line is a blank slot (`.w.hid`) until it is said correctly (live → green). After an attempt is scored **every answer word is shown**: correct = green; wrong / missed = the answer word in normal ink, exactly as the 👀 정답 hint shows it, on a light-red slot with a red underline (no strikethrough, no red text), plus the heard word underneath for substitutions. Owner wants the right answer readable in place of the mistake. Tapping the mic again clears the attempt and re-blanks the line. 💡 cycles: 0 blanks → 1 first letter on blanks only → 2 show answer. Hint resets to 0 when the line changes.
 
 ## Scoring (core.js)
 - `tokenize()` normalizes both sides: money (`$8.50` → 8 dollars and 50 cents), lowercase, strip punctuation, expand contractions (I've→i have), numbers <100 → words, `%` → percent, hyphens removed (off-peak→offpeak), `'s` → `s` token. Each token keeps the index of its display word.
@@ -73,7 +73,7 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 - Korean shown, English hidden is the core mode (not reading practice). Korean must be a literal translation to help recall the English word order.
 - Neighbouring sentences faded for continuity; past sentences scroll up, next ones below.
 - Hint only fills blanks, never re-hides correct words.
-- After scoring, show the correct word in place of each mistake (red), with the heard word underneath.
+- After scoring, show the correct word in place of each mistake — readable like the 정답 hint, marked wrong only by the red slot — with the heard word underneath.
 - Notify (toast) when Chrome drops recognition rather than silently ending.
 - Lists: reorder, multi-select delete, edit inside the dialogue, big textarea for adding.
 
@@ -83,9 +83,10 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.6.0 — 2026/11/19**
+- **Current version: v3.6.1 — 2026/11/19**
 
 ## Changelog
+- v3.6.1 (2026/11/19): wrong/missed words show the answer in normal ink (like the 정답 hint) on a red-underlined slot — no strikethrough, no red text.
 - v3.6.0 (2026/11/19): after scoring, wrong and missed words now reveal the correct answer word (red / strikethrough) instead of staying blank; the heard word stays underneath.
 - v3.5.0 (2026/11/19): library cards show practised-sentence count and last practice date (new `speakup.last.v3`) instead of "완벽 x/N" and its progress bar. Fix: editor/export sheets scroll on short screens (Save button was pushed off-screen when the viewport or keyboard left little height).
 - v3.4.0 (2026/11/19): sample replaced — "카페에서 커피 주문하기" (Barista/Customer, 17 lines) instead of the team-meeting script; browsers still holding the unedited old sample get it swapped on load. Prompt example switched to café lines. Tokenizer reads `$8.50`/`$8` as dollars/cents.

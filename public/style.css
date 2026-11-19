@@ -75,13 +75,11 @@
   .w{position:relative;border-radius:7px;padding:0 4px;transition:background .2s,color .2s}
   .w .fl,.w .rest{transition:color .2s}
   .w.live,.w.ok{background:var(--green-l);color:var(--green-d)}
-  .w.part{background:var(--orange-l);color:var(--orange-d)}
-  .w.bad{background:var(--red-l);color:var(--red-d)}
-  .w.miss{color:var(--faint);text-decoration:line-through;text-decoration-thickness:2px}
+  /* wrong / partly wrong / missed: the answer word in normal ink (like the 👀 정답 hint) on a red "wrong" slot */
+  .w.part,.w.bad,.w.miss{background:var(--red-l);color:var(--ink);box-shadow:inset 0 -3px 0 #FF9C9C}
   .w.hid{background:var(--soft);border-bottom:3px solid var(--line);text-decoration:none}
   .w.hid .fl,.w.hid .rest{color:transparent}
   .w.hid.fl1 .fl{color:var(--blue-d)}
-  .w.hid.bad,.w.hid.part,.w.hid.miss{background:var(--red-l);border-bottom-color:#FFB2B2}
   .w .said{position:absolute;left:50%;top:100%;transform:translateX(-50%);font-size:12px;font-weight:800;color:var(--red-d);white-space:nowrap;margin-top:1px}
   .w .said:empty{display:none}
   .en.has-said{row-gap:22px}
