@@ -77,3 +77,42 @@ Officials said inflation is still too high.
 
 [변환할 텍스트]
 (여기에 붙여 넣거나 이미지를 첨부)`;
+
+// English-UI version of the prompt. The output format is the same (the app is for practising English from Korean).
+export const CONVERT_PROMPT_EN = `Convert the English text below (a dialogue, news story, article — given as text or an image) into the format of my English-speaking practice app.
+
+[Output format]
+- First line: "# Title" — a short title summarising the content.
+- Then alternate: one English sentence on a line, and directly below it a literal Korean translation of that sentence on one line.
+- Exactly one sentence per line. Split paragraphs and long turns into sentences, each with its own English/Korean pair.
+- For speaking practice, very long sentences (over ~25 words) may be split at natural points (commas, conjunctions, before relative clauses).
+- If it is a dialogue with speakers, put "Name: " at the start of the English line only (not the Korean line). If there are no speakers (news, articles), write the sentence without a name.
+- If there are several texts or dialogues, put a line with "---" between them and give each its own "# Title".
+- Output only the result in a single code block: no blank lines, numbering, bullets, bold or explanations.
+
+[Korean translation rules]
+- Translate literally, not naturally: keep the English words and word order as much as possible. The learner reads only the Korean and recalls the original English.
+- Make tense, singular/plural and prepositions visible in the Korean. (e.g. "We expect to finish it by the end of next week." → "우리는 그것을 다음 주의 끝까지 끝낼 것을 예상합니다.")
+- Keep proper nouns, acronyms and product names (RCA, API …) in English.
+
+[English source rules]
+- Don't change the wording; only fix obvious typos.
+- For images, transcribe exactly; mark unreadable parts as [?] instead of guessing.
+- Drop anything that isn't the body text: headers, bylines, dates, photo captions, page numbers, ads.
+
+[Example — dialogue]
+# Ordering at a café
+Barista: What size would you like?
+당신은 어떤 사이즈를 원하시나요?
+Customer: A medium, please.
+중간 것 하나, 부탁합니다.
+
+[Example — news / article]
+# Rates on hold
+The central bank kept interest rates unchanged on Thursday.
+중앙은행은 목요일에 금리들을 변하지 않은 채로 유지했습니다.
+Officials said inflation is still too high.
+관계자들은 인플레이션이 여전히 너무 높다고 말했습니다.
+
+[Text to convert]
+(paste it here or attach an image)`;

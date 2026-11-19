@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3.10.0">
+<link rel="stylesheet" href="style.css?v=3.11.0">
 </head>
 <body class="v-lib">
 
@@ -21,24 +21,25 @@
   <div class="top">
     <div class="logo">Speak Up</div>
     <div class="popwrap">
-      <button class="iconbtn" id="promptBtn" aria-expanded="false">📋 프롬프트</button>
-      <div class="pop" id="promptPop" role="dialog" aria-label="대화문 변환 프롬프트">
-        <div class="ph">AI에게 대화문 변환 요청하기 <span id="promptState">복사됨 ✓</span></div>
+      <button class="iconbtn" id="promptBtn" aria-expanded="false" data-i18n="prompt">📋 프롬프트</button>
+      <div class="pop" id="promptPop" role="dialog" data-i18n-aria="promptTitle">
+        <div class="ph"><span data-i18n="promptTitle">AI에게 대화문 변환 요청하기</span> <span id="promptState">복사됨 ✓</span></div>
         <pre id="promptText"></pre>
-        <button class="btn sec pbtn" id="promptCopy">다시 복사</button>
+        <button class="btn sec pbtn" id="promptCopy" data-i18n="copyAgain">다시 복사</button>
       </div>
     </div>
     <button class="iconbtn" id="editModeBtn">✎ 편집</button>
+    <button class="iconbtn" id="settingsBtn" data-i18n-aria="settings" data-i18n-title="settings">⚙︎</button>
   </div>
   <div class="libscroll"><div class="libin">
-    <div class="warn" id="storeWarn">이 브라우저에서는 저장이 안 돼요. 창을 닫으면 대화가 사라지니 내보내기로 백업하세요.</div>
+    <div class="warn" id="storeWarn" data-i18n="storeWarn"></div>
     <div id="dlist"></div>
   </div></div>
   <div class="libbar"><div class="in">
     <div class="normalbar">
-      <button class="btn pri" id="addBtn">＋ 새 대화</button>
-      <button class="btn sec" id="importBtn">가져오기</button>
-      <button class="btn sec" id="exportBtn">내보내기</button>
+      <button class="btn pri" id="addBtn" data-i18n="addNew">＋ 새 대화</button>
+      <button class="btn sec" id="importBtn" data-i18n="import">가져오기</button>
+      <button class="btn sec" id="exportBtn" data-i18n="export">내보내기</button>
     </div>
     <div class="editbar">
       <button class="btn sec" id="selAllBtn">전체 선택</button>
@@ -52,9 +53,9 @@
 <!-- ================= INFO ================= -->
 <section class="view" id="infoView">
   <div class="top">
-    <button class="iconbtn" id="infoBack">‹ 목록</button>
+    <button class="iconbtn" id="infoBack" data-i18n="back">‹ 목록</button>
     <div style="flex:1"></div>
-    <button class="iconbtn" id="infoEdit">✎ 수정</button>
+    <button class="iconbtn" id="infoEdit" data-i18n="editInfo">✎ 수정</button>
   </div>
   <div class="infoscroll"><div class="infoin" id="infoBody"></div></div>
 </section>
@@ -62,10 +63,10 @@
 <!-- ================= PLAYER ================= -->
 <section class="view" id="playView">
   <div class="top ptop">
-    <button class="iconbtn" id="backBtn" aria-label="정보로">‹</button>
+    <button class="iconbtn" id="backBtn" data-i18n-aria="toInfo">‹</button>
     <div class="ttl" id="ptitle"></div>
     <div class="count" id="count"></div>
-    <button class="iconbtn" id="editDlgBtn" aria-label="대화 수정">✎</button>
+    <button class="iconbtn" id="editDlgBtn" data-i18n-aria="editDialog">✎</button>
   </div>
   <div class="bar"><i id="prog"></i></div>
   <div id="script"><div class="inner" id="inner"></div></div>
@@ -74,20 +75,20 @@
     <div class="result" id="result"><span class="score" id="score"></span><span><span id="msgT"></span> <span class="sub" id="msgS"></span></span></div>
     <div class="tools">
       <button class="chip" id="hintBtn">💡 힌트</button>
-      <button class="chip" id="play">🔊 듣기</button>
-      <button class="chip" id="autoBtn">⏭ 자동</button>
-      <button class="chip done" id="doneBtn" disabled>✅ 완료</button>
+      <button class="chip" id="play" data-i18n="listen">🔊 듣기</button>
+      <button class="chip" id="autoBtn" data-i18n="auto">⏭ 자동</button>
+      <button class="chip done" id="doneBtn" disabled data-i18n="doneChip">✅ 완료</button>
     </div>
     <div class="row">
-      <button class="nav" id="prev" aria-label="이전 문장">‹</button>
+      <button class="nav" id="prev" data-i18n-aria="prevLine">‹</button>
       <div class="micgrp">
         <span class="keepsp" aria-hidden="true"></span>
         <button class="mic" id="mic" aria-label="말하기">
           <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
         </button>
-        <button class="keep" id="keepBtn" aria-pressed="false" title="마이크를 계속 켜 두기">유지</button>
+        <button class="keep" id="keepBtn" aria-pressed="false" data-i18n="keep" data-i18n-title="keepTitle">유지</button>
       </div>
-      <button class="nav" id="next" aria-label="다음 문장">›</button>
+      <button class="nav" id="next" data-i18n-aria="nextLine">›</button>
     </div>
   </div></div>
 </section>
@@ -96,18 +97,18 @@
 <div class="overlay" id="edOverlay">
   <div class="sheet">
     <h2 id="edTitle">새 대화 추가</h2>
-    <p>첫 줄은 <b># 제목</b>, 그다음부터 <b>영어 한 줄 → 한글 직역 한 줄</b>이 한 쌍이에요. 줄 앞의 <b>- </b>와 <b>이름:</b>은 있어도 없어도 돼요. <b>---</b>로 나누면 여러 대화를 한 번에 추가해요.</p>
+    <p data-i18n-html="editorHelp"></p>
     <pre># 카페에서 주문하기
 - Barista: What size would you like?
 - 당신은 어떤 사이즈를 원하시나요?
 ---
 # 다음 대화 …</pre>
-    <textarea id="editor" spellcheck="false" placeholder="여기에 붙여 넣으세요"></textarea>
+    <textarea id="editor" spellcheck="false" data-i18n-ph="editorPh"></textarea>
     <div class="ferr" id="edErr"></div>
     <div class="btns">
-      <button class="btn danger" id="edDelete" style="flex:.6">삭제</button>
-      <button class="btn sec" id="edCancel">취소</button>
-      <button class="btn pri" id="edSave">저장</button>
+      <button class="btn danger" id="edDelete" style="flex:.6" data-i18n="del">삭제</button>
+      <button class="btn sec" id="edCancel" data-i18n="cancel">취소</button>
+      <button class="btn pri" id="edSave" data-i18n="save">저장</button>
     </div>
   </div>
 </div>
@@ -115,7 +116,7 @@
 <!-- ================= EXPORT SHEET ================= -->
 <div class="overlay" id="exOverlay">
   <div class="sheet">
-    <h2>내보내기</h2>
+    <h2 data-i18n="exportTitle">내보내기</h2>
     <p id="exInfo"></p>
     <div class="seg">
       <button class="chip on" id="exMd">Markdown (.md)</button>
@@ -123,16 +124,47 @@
     </div>
     <textarea id="exText" readonly></textarea>
     <div class="btns">
-      <button class="btn sec" id="exClose">닫기</button>
-      <button class="btn sec" id="exCopy">복사</button>
-      <button class="btn pri" id="exDown">파일로 저장</button>
+      <button class="btn sec" id="exClose" data-i18n="close">닫기</button>
+      <button class="btn sec" id="exCopy" data-i18n="copy">복사</button>
+      <button class="btn pri" id="exDown" data-i18n="saveFile">파일로 저장</button>
     </div>
   </div>
 </div>
 
-<div class="modal" id="modal"><div class="mbox"><p id="mText"></p><div class="btns"><button class="btn sec" id="mNo">취소</button><button class="btn danger" id="mYes">삭제</button></div></div></div>
+<div class="modal" id="modal"><div class="mbox"><p id="mText"></p><div class="btns"><button class="btn sec" id="mNo" data-i18n="cancel">취소</button><button class="btn danger" id="mYes">삭제</button></div></div></div>
+<!-- ================= SETTINGS SHEET ================= -->
+<div class="overlay" id="setOverlay">
+  <div class="sheet">
+    <h2 data-i18n="settings">설정</h2>
+    <div class="setrow">
+      <div class="setlbl" data-i18n="langLabel">앱 언어</div>
+      <div class="seg" id="langSeg">
+        <button class="chip" data-lang="system" data-i18n="langSystem">시스템 설정 따르기</button>
+        <button class="chip" data-lang="ko">한국어</button>
+        <button class="chip" data-lang="en">English</button>
+      </div>
+    </div>
+    <p class="ver" id="verText"></p>
+    <div class="btns"><button class="btn sec" id="setClose" data-i18n="close">닫기</button></div>
+  </div>
+</div>
+
+<!-- ================= FINISH SCREEN ================= -->
+<div class="finish" id="finish">
+  <canvas id="confetti"></canvas>
+  <div class="fin-in">
+    <div class="fin-trophy">🏆</div>
+    <h1 class="fin-title" data-i18n="finTitle">끝까지 해냈어요!</h1>
+    <div class="fin-dlg" id="finDlg"></div>
+    <div class="fin-score" id="finScore"></div>
+    <div class="fin-score-l" data-i18n="finAvg">평균 점수</div>
+    <div class="fin-stats" id="finStats"></div>
+    <blockquote class="fin-quote" id="finQuote"></blockquote>
+    <button class="btn pri fin-btn" id="finDone" data-i18n="finDone">완료</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=3.10.0"></script>
+<script type="module" src="js/app.js?v=3.11.0"></script>
 </body>
 </html>

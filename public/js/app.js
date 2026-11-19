@@ -1,6 +1,9 @@
 // Speak Up — UI. Views: library → info → player. All data lives in localStorage (see store below).
 import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, fillWords, scoreAttempt, dialogStats } from "./core.js";
-import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT } from "./content.js";
+import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT, CONVERT_PROMPT_EN } from "./content.js";
+import { t, lang, setLang, langChoice, setLangChoice, resolveLang, applyStatic, QUOTES } from "./i18n.js";
+const VERSION = "3.11.0";
+const promptText = () => lang() === "en" ? CONVERT_PROMPT_EN : CONVERT_PROMPT;
 
 /* ================= store (localStorage) ================= */
 const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3", count: "speakup.count.v3", last: "speakup.last.v3", auto: "speakup.auto.v3", keep: "speakup.keep.v3" };
@@ -31,8 +34,8 @@ const bestOf = (d, l) => best[d.id + "|" + l.en];
 function relDate(ms) {                         // 오늘 / 어제 / N일 전 (≤6) / M월 D일 / YYYY. M. D.
   const d = new Date(ms), now = new Date(), day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate());
   const diff = Math.round((day(now) - day(d)) / 864e5);
-  if (diff <= 0) return "오늘"; if (diff === 1) return "어제"; if (diff < 7) return `${diff}일 전`;
-  return d.getFullYear() === now.getFullYear() ? `${d.getMonth() + 1}월 ${d.getDate()}일` : `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
+  if (diff <= 0) return t("today"); if (diff === 1) return t("yesterday"); if (diff < 7) return t("daysAgo", diff);
+  return d.getFullYear() === now.getFullYear() ? t("dateMD", d) : t("dateYMD", d);
 }
 
 /* ================= helpers ================= */
@@ -45,7 +48,7 @@ const spkChip = s => s ? `<span class="spk" style="background:${colorFor(s)}">${
 let toastT = null;
 function toast(m) { const t = $("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2200); }
 function showStoreWarn() { $("storeWarn").classList.toggle("show", !storageOK); }
-function ask(text, yes = "삭제") {
+function ask(text, yes = t("del")) {
   return new Promise(res => {
     $("mText").textContent = text; $("mYes").textContent = yes; $("modal").classList.add("show");
     const done = v => { $("modal").classList.remove("show"); $("mYes").onclick = $("mNo").onclick = null; res(v); };
@@ -65,10 +68,10 @@ let editing = false; const selected = new Set();
 function renderLib() {
   showStoreWarn();
   $("libView").classList.toggle("editing", editing);
-  $("editModeBtn").textContent = editing ? "완료" : "✎ 편집"; $("editModeBtn").classList.toggle("on", editing);
+  $("editModeBtn").textContent = editing ? t("done") : t("edit"); $("editModeBtn").classList.toggle("on", editing);
   const el = $("dlist");
   if (!lib.length) {
-    el.innerHTML = `<div class="empty">아직 대화가 없어요.<br><button class="btn pri" id="addSample">샘플 대화 추가</button></div>`;
+    el.innerHTML = `<div class="empty">${t("empty")}<br><button class="btn pri" id="addSample">${t("addSample")}</button></div>`;
     $("addSample").onclick = () => addDialogs(parseMd(SAMPLE_MD));
   } else {
     el.innerHTML = lib.map((d, i) => {
@@ -76,15 +79,15 @@ function renderLib() {
       return `<div class="dcard ${sel ? "sel" : ""}" data-id="${d.id}">
         <span class="chk">${sel ? "✓" : ""}</span>
         <div class="dmain"><div class="dt">${esc(d.title)}</div>
-          <div class="dm">${n}문장 · ${cnt ? `연습 ${cnt}문장` + (last ? ` · 마지막 ${relDate(last)}` : "") : "아직 연습 안 함"}</div></div>
-        <div class="mv"><button data-mv="-1" ${i === 0 ? "disabled" : ""} aria-label="위로">▲</button><button data-mv="1" ${i === lib.length - 1 ? "disabled" : ""} aria-label="아래로">▼</button></div>
+          <div class="dm">${t("cardMeta", n, cnt, last ? relDate(last) : "")}</div></div>
+        <div class="mv"><button data-mv="-1" ${i === 0 ? "disabled" : ""} aria-label="${t("moveUp")}">▲</button><button data-mv="1" ${i === lib.length - 1 ? "disabled" : ""} aria-label="${t("moveDown")}">▼</button></div>
         <span class="chev">›</span></div>`;
     }).join("");
   }
   $("delSelBtn").disabled = $("exSelBtn").disabled = !selected.size;
-  $("exSelBtn").textContent = selected.size ? `${selected.size}개 내보내기` : "내보내기";
-  $("delSelBtn").textContent = selected.size ? `${selected.size}개 삭제` : "삭제";
-  $("selAllBtn").textContent = selected.size === lib.length && lib.length ? "선택 해제" : "전체 선택";
+  $("exSelBtn").textContent = selected.size ? t("exportN", selected.size) : t("export");
+  $("delSelBtn").textContent = selected.size ? t("delN", selected.size) : t("del");
+  $("selAllBtn").textContent = selected.size === lib.length && lib.length ? t("deselectAll") : t("selectAll");
 }
 $("dlist").addEventListener("click", e => {
   const c = e.target.closest(".dcard"); if (!c) return;
@@ -101,18 +104,17 @@ $("editModeBtn").onclick = () => { editing = !editing; selected.clear(); renderL
 $("selAllBtn").onclick = () => { if (selected.size === lib.length) selected.clear(); else lib.forEach(d => selected.add(d.id)); renderLib(); };
 $("delSelBtn").onclick = async () => {
   if (!selected.size) return;
-  if (!await ask(`대화 ${selected.size}개를 삭제할까요? 되돌릴 수 없어요.`)) return;
+  if (!await ask(t("confirmDeleteN", selected.size))) return;
   const n = selected.size;
   lib = lib.filter(d => !selected.has(d.id)); selected.forEach(id => { delete posMap[id]; delete countMap[id]; delete lastMap[id]; }); selected.clear();
-  saveLib(); ls.set(K.pos, posMap); ls.set(K.count, countMap); ls.set(K.last, lastMap); editing = false; renderLib(); toast(`${n}개 삭제했어요`);
+  saveLib(); ls.set(K.pos, posMap); ls.set(K.count, countMap); ls.set(K.last, lastMap); editing = false; renderLib(); toast(t("deletedN", n));
 };
 function addDialogs(ds) { const t = Date.now(); ds.forEach((d, i) => lib.push(newDialog(d, t + i))); saveLib(); renderLib(); }
 
 /* ---- prompt popover: opens + copies on click, closes on outside click / blur / Esc ---- */
-$("promptText").textContent = CONVERT_PROMPT;
 async function copyPrompt() {
-  try { await navigator.clipboard.writeText(CONVERT_PROMPT); $("promptState").textContent = "복사됨 ✓"; toast("프롬프트를 복사했어요"); }
-  catch (e) { $("promptState").textContent = "직접 복사해 주세요"; const r = document.createRange(); r.selectNodeContents($("promptText")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  try { await navigator.clipboard.writeText(promptText()); $("promptState").textContent = t("copied"); toast(t("promptCopiedToast")); }
+  catch (e) { $("promptState").textContent = t("copyManually"); const r = document.createRange(); r.selectNodeContents($("promptText")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
 }
 function setPrompt(open) { $("promptPop").classList.toggle("show", open); $("promptBtn").classList.toggle("on", open); $("promptBtn").setAttribute("aria-expanded", open); }
 $("promptBtn").onclick = () => { const open = !$("promptPop").classList.contains("show"); setPrompt(open); if (open) copyPrompt(); };
@@ -124,7 +126,7 @@ window.addEventListener("blur", () => setPrompt(false));
 let edMode = "add";
 function openEditor(mode) {
   edMode = mode;
-  $("edTitle").textContent = mode === "add" ? "새 대화 추가" : "대화 수정";
+  $("edTitle").textContent = mode === "add" ? t("addTitle") : t("editTitle");
   $("edDelete").style.display = mode === "edit" ? "" : "none";
   $("editor").value = mode === "edit" ? toMd(dlg) : "";
   $("edErr").className = "ferr";
@@ -138,19 +140,19 @@ $("editDlgBtn").onclick = () => { if (listening) stopListening(true); openEditor
 $("edCancel").onclick = closeEditor;
 $("edSave").onclick = () => {
   const ds = parseMd($("editor").value);
-  if (!ds.length) { $("edErr").textContent = "영어 문장을 하나도 찾지 못했어요. 형식을 확인해 주세요."; $("edErr").className = "ferr show"; return; }
-  if (edMode === "add") { addDialogs(ds); closeEditor(); toast(ds.length > 1 ? `대화 ${ds.length}개를 추가했어요` : `"${ds[0].title}" 추가했어요`); return; }
+  if (!ds.length) { $("edErr").textContent = t("noEnglish"); $("edErr").className = "ferr show"; return; }
+  if (edMode === "add") { addDialogs(ds); closeEditor(); toast(ds.length > 1 ? t("addedN", ds.length) : t("addedOne", ds[0].title)); return; }
   const [first, ...rest] = ds;                                   // edit: first replaces this dialogue, extras are inserted after it
   dlg.title = first.title; dlg.lines = first.lines; dlg.updated = Date.now();
   if (rest.length) { const at = lib.indexOf(dlg), t = Date.now(); lib.splice(at + 1, 0, ...rest.map((d, i) => newDialog(d, t + i))); }
   saveLib(); closeEditor();
   if (view === "play") openPlayer(Math.min(idx, dlg.lines.length - 1)); else renderInfo();
-  toast(rest.length ? `수정했고, 대화 ${rest.length}개를 새로 추가했어요` : "수정했어요");
+  toast(rest.length ? t("editedPlus", rest.length) : t("edited"));
 };
 $("edDelete").onclick = async () => {
-  if (!await ask(`"${dlg.title}" 대화를 삭제할까요?`)) return;
+  if (!await ask(t("confirmDeleteOne", dlg.title))) return;
   lib = lib.filter(d => d !== dlg); delete posMap[dlg.id]; delete countMap[dlg.id]; delete lastMap[dlg.id]; saveLib(); ls.set(K.pos, posMap); ls.set(K.count, countMap); ls.set(K.last, lastMap);
-  closeEditor(); goLibrary(); toast("삭제했어요");
+  closeEditor(); goLibrary(); toast(t("deleted"));
 };
 
 /* ---- import (.md / .json, appended) ---- */
@@ -165,8 +167,8 @@ $("fileIn").onchange = async e => {
       ds.length ? (added = added.concat(ds)) : bad++;
     } catch (err) { bad++; }
   }
-  if (added.length) { addDialogs(added); toast(`대화 ${added.length}개를 추가했어요` + (bad ? ` (실패 ${bad})` : "")); }
-  else toast("가져올 대화를 찾지 못했어요");
+  if (added.length) { addDialogs(added); toast(t("addedN", added.length) + (bad ? t("importFailed", bad) : "")); }
+  else toast(t("nothingToImport"));
 };
 
 /* ---- export (all dialogues, or the ones selected in edit mode; one .md joined by ---, or .json) ---- */
@@ -175,23 +177,23 @@ const inArtifact = !!(window.claude && typeof window.claude.use === "function");
 function fillExport() {
   $("exMd").classList.toggle("on", exFmt === "md"); $("exJson").classList.toggle("on", exFmt === "json");
   $("exText").value = exFmt === "md" ? libraryToMd(exList) : libraryToJson(exList);
-  $("exInfo").textContent = `${exList.length === lib.length ? "전체 " : "선택한 "}대화 ${exList.length}개 · ${exList.reduce((a, d) => a + d.lines.length, 0)}문장`;
+  $("exInfo").textContent = t("exportInfo", exList.length === lib.length, exList.length, exList.reduce((a, d) => a + d.lines.length, 0));
   $("exDown").style.display = (!inArtifact || downloads) ? "" : "none";
 }
 function openExport(list) { exList = list; fillExport(); $("exOverlay").classList.add("show"); }
-$("exportBtn").onclick = () => { if (!lib.length) { toast("내보낼 대화가 없어요"); return; } openExport(lib); };
+$("exportBtn").onclick = () => { if (!lib.length) { toast(t("nothingToExport")); return; } openExport(lib); };
 $("exSelBtn").onclick = () => { if (selected.size) openExport(lib.filter(d => selected.has(d.id))); };   // keeps list order
 $("exMd").onclick = () => { exFmt = "md"; fillExport(); };
 $("exJson").onclick = () => { exFmt = "json"; fillExport(); };
 $("exClose").onclick = () => $("exOverlay").classList.remove("show");
 $("exCopy").onclick = async () => {
-  try { await navigator.clipboard.writeText($("exText").value); toast("복사했어요"); }
-  catch (e) { $("exText").select(); toast("선택됐어요. 직접 복사해 주세요"); }
+  try { await navigator.clipboard.writeText($("exText").value); toast(t("copiedToast")); }
+  catch (e) { $("exText").select(); toast(t("selectedCopy")); }
 };
 $("exDown").onclick = async () => {
   const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
   const filename = (exList.length === 1 ? `speak-up-${exList[0].title.replace(/[\\/:*?"<>|]+/g, "").trim().slice(0, 40)}-${stamp}` : `speak-up-${stamp}`) + `.${exFmt}`, data = $("exText").value;
-  if (downloads) { try { await downloads.save({ filename, data }); toast("저장했어요"); } catch (e) { toast("저장이 취소됐어요"); } return; }
+  if (downloads) { try { await downloads.save({ filename, data }); toast(t("savedFile")); } catch (e) { toast(t("saveCancelled")); } return; }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([data], { type: exFmt === "md" ? "text/markdown" : "application/json" })); a.download = filename;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -204,13 +206,13 @@ function renderInfo() {
   $("infoBody").innerHTML = `
     <div class="ititle">${esc(dlg.title)}</div>
     <div class="stats">
-      <div class="stat"><b>${n}</b><span>문장</span></div>
-      <div class="stat"><b>${s.words}</b><span>단어</span></div>
-      <div class="stat"><b>${countMap[dlg.id] || 0}</b><span>연습한 문장</span></div>
+      <div class="stat"><b>${n}</b><span>${t("stSentences")}</span></div>
+      <div class="stat"><b>${s.words}</b><span>${t("stWords")}</span></div>
+      <div class="stat"><b>${countMap[dlg.id] || 0}</b><span>${t("stPracticed")}</span></div>
     </div>
     <div class="startrow">${at > 0
-      ? `<button class="btn sec" id="startTop">처음부터</button><button class="btn pri" id="startResume">▶ ${at + 1}번째부터 이어서</button>`
-      : `<button class="btn pri" id="startTop">▶ 시작</button>`}</div>
+      ? `<button class="btn sec" id="startTop">${t("fromStart")}</button><button class="btn pri" id="startResume">${t("resumeAt", at + 1)}</button>`
+      : `<button class="btn pri" id="startTop">${t("start")}</button>`}</div>
     ${s.speakers.length ? `<div class="spks">${s.speakers.map(spkChip).join("")}</div>` : ""}
     <ul class="tl">${dlg.lines.map((l, i) => { const b = bestOf(dlg, l);
       return `<li><span class="no">${i + 1}</span><div class="tx"><div class="te">${spkChip(l.spk)}${esc(l.en)}</div><div class="tk">${esc(l.ko || "")}</div></div><span class="bs ${b === 100 ? "p" : ""}">${b != null ? b + "%" : ""}</span></li>`; }).join("")}</ul>`;
@@ -232,7 +234,9 @@ let refCache = {};
 const refOf = i => refCache[i] || (refCache[i] = tokenize(lines[i].en));
 const badge = s => s == null ? "" : `<span class="badge ${s >= 80 ? "g" : s >= 50 ? "m" : "l"}">${s}%</span>`;
 
+let sessionStart = 0;
 function openPlayer(at) {
+  sessionStart = Date.now();
   lines = dlg.lines; attempts = {}; refCache = {}; liveSt = null; hintLv = 0;
   idx = Math.max(0, Math.min(lines.length - 1, at));
   posMap[dlg.id] = idx; ls.set(K.pos, posMap);
@@ -264,10 +268,10 @@ function lineHTML(i) {
   const L = lines[i], cur = i === idx, att = attempts[i];
   let en = "";
   if (cur) en = `<div class="en" id="curEn">${wordsHTML(i)}</div>
-      <div class="heard" id="heard">${att ? att.heardHTML : `<span class="ph">한글 직역을 보고 영어로 말해 보세요.</span>`}</div>`;
+      <div class="heard" id="heard">${att ? att.heardHTML : `<span class="ph">${t("sayIt")}</span>`}</div>`;
   // past and future lines never show the English (it is the answer) — Korean only
   const bdg = cur ? badge(bestOf(dlg, L)) : (i < idx && att ? badge(att.score) : "");
-  return `<div class="ln ${cur ? "cur" : ""}${Math.abs(i - idx) === 1 ? " near" : ""}" data-i="${i}">${spkChip(L.spk)}${bdg}<div class="ko">${esc(L.ko || "(번역 없음)")}</div>${en}</div>`;
+  return `<div class="ln ${cur ? "cur" : ""}${Math.abs(i - idx) === 1 ? " near" : ""}" data-i="${i}">${spkChip(L.spk)}${bdg}<div class="ko">${esc(L.ko || t("noTranslation"))}</div>${en}</div>`;
 }
 function rerenderLine(i) { const el = inner.children[i]; if (el) el.outerHTML = lineHTML(i); if (i === idx) paintCurWords(); }
 function renderAll() { inner.innerHTML = lines.map((_, i) => lineHTML(i)).join(""); paintCurWords(); updateCount(); }
@@ -302,7 +306,7 @@ function onScrollSettle() {
   if (bi !== idx) select(bi, { scroll: false });
 }
 inner.addEventListener("click", e => { const ln = e.target.closest(".ln"); if (ln && !ln.classList.contains("cur")) select(+ln.dataset.i); });
-function updateHintBtn() { const b = $("hintBtn"); b.textContent = ["💡 힌트", "💡 첫 글자", "👀 정답"][hintLv]; b.classList.toggle("on", hintLv > 0); }
+function updateHintBtn() { const b = $("hintBtn"); b.textContent = t("hint" + hintLv); b.classList.toggle("on", hintLv > 0); }
 
 /* ---- TTS ---- */
 function speak(rate) {
@@ -323,7 +327,7 @@ let filledSet = new Set();  // answer word indices filled so far in the current 
 function showLive() {
   const heard = $("heard"); if (!heard) return;
   const full = (finalText + " " + interimText).trim();
-  if (!full) { if (!attempts[idx]) heard.innerHTML = `<span class="label">LISTENING…</span><span class="ph">듣고 있어요…</span>`; return; }
+  if (!full) { if (!attempts[idx]) heard.innerHTML = `<span class="label">${t("listening")}</span><span class="ph">${t("listeningPh")}</span>`; return; }
   if (attempts[idx]) { delete attempts[idx]; resEl.className = "result"; rerenderLine(idx); }   // keep mode: speaking again = new attempt
   const ref = refOf(idx);
   fillWords(ref, [full, ...finalParts, interimText]).forEach(k => filledSet.add(k));
@@ -333,9 +337,9 @@ function showLive() {
 }
 function evaluate() {
   const said = (finalText + " " + interimText).trim(); liveSt = null;
-  if (!said) { paintCurWords(); const h = $("heard"); if (h) h.innerHTML = `<span class="ph">아무 말도 인식되지 않았어요. 다시 해 볼까요?</span>`; return; }
+  if (!said) { paintCurWords(); const h = $("heard"); if (h) h.innerHTML = `<span class="ph">${t("nothingHeard")}</span>`; return; }
   const r = scoreAttempt(lines[idx].en, said, [...finalParts, interimText], [...filledSet]);
-  const heardHTML = `<span class="label">YOU SAID</span>` + r.heard.map(h => `<span class="h ${h.st}">${esc(h.w)}</span>`).join(" ");
+  const heardHTML = `<span class="label">${t("youSaid")}</span>` + r.heard.map(h => `<span class="h ${h.st}">${esc(h.w)}</span>`).join(" ");
   attempts[idx] = { st: r.st, said: r.said, score: r.score, heardHTML };
   hintLv = 0; updateHintBtn();                                   // hint resets once the sentence is scored
   if (r.score === 100) chime();
@@ -344,14 +348,17 @@ function evaluate() {
   const key = dlg.id + "|" + lines[idx].en; if (best[key] == null || r.score > best[key]) { best[key] = r.score; ls.set(K.best, best); }
   rerenderLine(idx);
   const [cls, title] = r.score === 100 ? ["good", "Perfect! 🎉"] : r.score >= 80 ? ["good", "Great!"] : r.score >= 50 ? ["mid", "Good try!"] : ["low", "One more time!"];
-  const parts = [`빈칸 ${r.ok}/${r.total}`]; if (r.bad) parts.push(`틀림 ${r.bad}`); if (r.miss) parts.push(`빠짐 ${r.miss}`);
+  const parts = [t("blanks", r.ok, r.total)]; if (r.bad) parts.push(t("wrongN", r.bad)); if (r.miss) parts.push(t("missedN", r.miss));
   $("score").textContent = r.score + "%"; $("msgT").textContent = title; $("msgS").textContent = parts.join(" · ");
   resEl.className = "result show " + cls;
   clearTimeout(autoTimer);
   if (autoNext && r.score === 100 && idx < lines.length - 1) {
     const at = idx; if (keepOn && listening) gated = true;      // ignore speech until the next line is up
     autoTimer = setTimeout(() => { if (view === "play" && idx === at && (keepOn || !listening)) select(idx + 1); else gated = false; }, 1400);
-  } else if (keepOn && listening && r.score === 100 && idx === lines.length - 1) stopListening(true);   // end of script
+  } else if (r.score === 100 && idx === lines.length - 1) {     // last sentence perfect → finish screen
+    if (keepOn && listening) stopListening(true);
+    const at = idx; autoTimer = setTimeout(() => { if (view === "play" && idx === at) showFinish(); }, 1300);
+  }
 }
 /* ---- success chime: a short rising two-note tone synthesized with Web Audio (no audio file) on a 100% sentence.
  * The AudioContext is created/resumed on the mic tap (a user gesture) so iOS lets it play later. */
@@ -369,7 +376,7 @@ function chime() {
     });
   } catch (e) {}
 }
-function setMicUI(on) { micEl.classList.toggle("rec", on); micEl.title = on ? (keepOn ? "계속 듣는 중… 탭하면 마이크 끔" : "말하는 중… 탭하면 채점") : "탭해서 말하기"; updateDone(); micEl.setAttribute("aria-label", micEl.title); }
+function setMicUI(on) { micEl.classList.toggle("rec", on); micEl.title = on ? (keepOn ? t("micKeep") : t("micTalk")) : t("micIdle"); updateDone(); micEl.setAttribute("aria-label", micEl.title); }
 function showErr(m) { errEl.textContent = m; errEl.className = "err show"; }
 function finish() {
   if (finished) return; finished = true; listening = false; clearTimeout(silenceTimer); setMicUI(false);
@@ -423,15 +430,15 @@ function nativeStart() {
   rec.onerror = e => {
     if (e.error === "no-speech" || e.error === "aborted") return;
     stopRequested = true;
-    if (e.error === "not-allowed" || e.error === "service-not-allowed") showErr("마이크 권한이 막혀 있어요. 주소창 왼쪽 아이콘에서 마이크를 허용해 주세요.");
-    else if (e.error === "network") showErr("음성 인식 서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.");
-    else showErr("음성 인식 오류: " + e.error);
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") showErr(t("errMic"));
+    else if (e.error === "network") showErr(t("errNetwork"));
+    else showErr(t("errOther", e.error));
   };
   rec.onend = () => {
     if (listening && !stopRequested && !finished) {
       if (interimText) finalParts.push(interimText);
       baseText = (finalText + " " + interimText).trim(); finalText = baseText; interimText = ""; basePartsN = finalParts.length;
-      try { nativeStart(); nudge("🔄 인식이 잠깐 끊겨서 다시 듣는 중이에요"); return; } catch (e) {}
+      try { nativeStart(); nudge(t("resumed")); return; } catch (e) {}
     }
     finish();
   };
@@ -446,10 +453,10 @@ function startListening() {
   if (engine === "dictation") {
     dictation.start().catch(err => {    // must be called synchronously from the click
       const r = String(err && (err.code || err.message) || err);
-      showErr(/not_granted/.test(r) ? "마이크 사용이 허용되지 않았어요." : "받아쓰기를 시작하지 못했어요: " + r);
+      showErr(/not_granted/.test(r) ? t("errDictDenied") : t("errDictStart", r));
       finished = true; listening = false; setMicUI(false);
     });
-  } else { try { nativeStart(); } catch (e) { showErr("음성 인식을 시작하지 못했어요."); finished = true; listening = false; setMicUI(false); } }
+  } else { try { nativeStart(); } catch (e) { showErr(t("errStart")); finished = true; listening = false; setMicUI(false); } }
 }
 function stopListening(drop) {
   clearTimeout(silenceTimer); stopRequested = true; if (drop) abandon = true;
@@ -459,7 +466,7 @@ function stopListening(drop) {
 }
 function setEngine(n) {
   engine = n; micEl.dataset.engine = n || "none";   // "dictation" (Claude artifact) | "native" (Web Speech, en-US)
-  if (!n) { micEl.disabled = true; showErr("이 브라우저는 음성 인식을 지원하지 않아요. Chrome·Edge·Safari에서 열어 주세요."); }
+  if (!n) { micEl.disabled = true; showErr(t("errUnsupported")); }
 }
 (async function initEngine() {
   if (inArtifact) {
@@ -481,11 +488,11 @@ function setEngine(n) {
 /* ---- player controls ---- */
 micEl.addEventListener("click", () => { unlockAudio(); if (!engine) return; listening ? stopListening() : startListening(); });
 $("prev").onclick = () => select(idx - 1);
-$("next").onclick = () => select(idx + 1);
+$("next").onclick = () => { unlockAudio(); if (idx === lines.length - 1 && attempts[idx]) { if (listening) stopListening(true); showFinish(); } else select(idx + 1); };
 $("play").onclick = () => speak(0.95);
 $("hintBtn").onclick = () => { hintLv = (hintLv + 1) % 3; updateHintBtn(); paintCurWords(); };
 function updateKeep() { $("keepBtn").classList.toggle("on", keepOn); $("keepBtn").setAttribute("aria-pressed", keepOn); }
-$("keepBtn").onclick = () => { keepOn = !keepOn; ls.set(K.keep, keepOn); updateKeep(); setMicUI(listening); toast(keepOn ? "마이크를 계속 켜 둬요. 끄려면 마이크를 누르세요" : "문장마다 마이크를 켜고 꺼요"); };
+$("keepBtn").onclick = () => { keepOn = !keepOn; ls.set(K.keep, keepOn); updateKeep(); setMicUI(listening); toast(keepOn ? t("keepOnToast") : t("keepOffToast")); };
 function updateAuto() { $("autoBtn").classList.toggle("on", autoNext); }
 $("autoBtn").onclick = () => { autoNext = !autoNext; ls.set(K.auto, autoNext); updateAuto(); };
 $("doneBtn").onclick = () => { unlockAudio(); if (listening) sentenceDone(); };
@@ -502,4 +509,73 @@ document.addEventListener("keydown", e => {
 });
 window.addEventListener("resize", () => { if (view === "play") centerCurrent(false); });
 
-updateHintBtn(); updateAuto(); updateKeep(); renderLib();
+/* ================= FINISH SCREEN: score, confetti, fanfare, a perseverance quote ================= */
+let confettiRAF = 0;
+function showFinish() {
+  const done = Object.values(attempts), n = lines.length;
+  const avg = done.length ? Math.round(done.reduce((a, x) => a + x.score, 0) / done.length) : 0;
+  const perfect = done.filter(x => x.score === 100).length, secs = Math.round((Date.now() - sessionStart) / 1000);
+  $("finDlg").textContent = dlg.title;
+  $("finScore").textContent = avg + "%";
+  $("finStats").innerHTML = [[t("finPerfect"), `${perfect}/${n}`], [t("finSpoken"), `${done.length}/${n}`], [t("finTime"), t("minSec", Math.floor(secs / 60), secs % 60)]]
+    .map(([l, v]) => `<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("");
+  const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+  $("finQuote").innerHTML = `<p class="q-en">“${esc(q.en)}”</p>` + (lang() === "ko" ? `<p class="q-ko">${esc(q.ko)}</p><cite>— ${esc(q.by)} (${esc(q.byKo)})</cite>` : `<cite>— ${esc(q.by)}</cite>`);
+  $("finish").classList.add("show");
+  fanfare(); startConfetti();
+}
+$("finDone").onclick = () => { $("finish").classList.remove("show"); stopConfetti(); goLibrary(); };
+function fanfare() {                                // "빰빠밤~": rising arpeggio into a held major chord (synthesized)
+  unlockAudio(); if (!actx) return;
+  try {
+    const t0 = actx.currentTime + 0.05;
+    const notes = [[392, 0, 0.13], [523, 0.15, 0.13], [659, 0.3, 0.13], [784, 0.45, 0.9], [523, 0.45, 0.9], [659, 0.45, 0.9]];
+    notes.forEach(([f, dt, len]) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = "triangle"; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t0 + dt); g.gain.linearRampToValueAtTime(0.18, t0 + dt + 0.02); g.gain.setValueAtTime(0.18, t0 + dt + len * 0.6);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dt + len);
+      o.connect(g).connect(actx.destination); o.start(t0 + dt); o.stop(t0 + dt + len + 0.05);
+    });
+  } catch (e) {}
+}
+function startConfetti() {
+  const cv = $("confetti"), ctx = cv.getContext("2d"), dpr = window.devicePixelRatio || 1;
+  const W = cv.width = innerWidth * dpr, H = cv.height = innerHeight * dpr;
+  const colors = ["#58CC02", "#1CB0F6", "#FF9600", "#FF4B4B", "#CE82FF", "#FFC800"];
+  const ps = Array.from({ length: 170 }, () => ({
+    x: Math.random() * W, y: -Math.random() * H * 0.8, w: (6 + Math.random() * 6) * dpr, h: (10 + Math.random() * 8) * dpr,
+    vy: (2 + Math.random() * 3) * dpr, vx: (Math.random() - 0.5) * 2 * dpr, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.25,
+    c: colors[Math.floor(Math.random() * colors.length)], sway: Math.random() * 6,
+  }));
+  const start = performance.now();
+  cancelAnimationFrame(confettiRAF);
+  const frame = now => {
+    const el = (now - start) / 1000; ctx.clearRect(0, 0, W, H);
+    ctx.globalAlpha = el > 4 ? Math.max(0, 1 - (el - 4) / 1.5) : 1;
+    ps.forEach(p => {
+      p.y += p.vy; p.x += p.vx + Math.sin(el * 3 + p.sway) * 0.6 * dpr; p.r += p.vr;
+      if (p.y > H && el < 3) { p.y = -20 * dpr; p.x = Math.random() * W; }
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(el * 4 + p.sway))); ctx.restore();
+    });
+    if (el < 5.5) confettiRAF = requestAnimationFrame(frame); else ctx.clearRect(0, 0, W, H);
+  };
+  confettiRAF = requestAnimationFrame(frame);
+}
+function stopConfetti() { cancelAnimationFrame(confettiRAF); const cv = $("confetti"); cv.getContext("2d").clearRect(0, 0, cv.width, cv.height); }
+
+/* ================= SETTINGS: app language (system / 한국어 / English) ================= */
+function paintLangSeg() { const c = langChoice(); document.querySelectorAll("#langSeg [data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === c)); }
+function applyLang() {
+  setLang(resolveLang()); applyStatic();
+  $("promptText").textContent = promptText(); $("verText").textContent = `Speak Up v${VERSION}`;
+  updateHintBtn(); setMicUI(listening);
+  if (view === "lib") renderLib(); else if (view === "info") renderInfo(); else if (view === "play") { renderAll(); requestAnimationFrame(() => centerCurrent(false)); }
+}
+$("settingsBtn").onclick = () => { paintLangSeg(); $("setOverlay").classList.add("show"); };
+$("setClose").onclick = () => $("setOverlay").classList.remove("show");
+$("setOverlay").addEventListener("click", e => { if (e.target.id === "setOverlay") $("setOverlay").classList.remove("show"); });
+$("langSeg").addEventListener("click", e => { const b = e.target.closest("[data-lang]"); if (!b) return; setLangChoice(b.dataset.lang); paintLangSeg(); applyLang(); });
+
+applyLang(); updateAuto(); updateKeep();
