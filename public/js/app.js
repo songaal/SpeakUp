@@ -331,7 +331,7 @@ function evaluate() {
   clearTimeout(autoTimer);
   if (autoNext && r.score === 100 && idx < lines.length - 1) { const at = idx; autoTimer = setTimeout(() => { if (view === "play" && idx === at && !listening) select(idx + 1); }, 1400); }
 }
-function setMicUI(on) { micEl.classList.toggle("rec", on); $("hint").textContent = on ? (pauseMs ? "말하는 중… 탭하면 끝" : "말하는 중… 다 말하면 탭") : "탭해서 말하기"; }
+function setMicUI(on) { micEl.classList.toggle("rec", on); micEl.title = on ? (pauseMs ? "말하는 중… 탭하면 끝" : "말하는 중… 다 말하면 탭") : "탭해서 말하기"; micEl.setAttribute("aria-label", micEl.title); }
 function showErr(m) { errEl.textContent = m; errEl.className = "err show"; }
 function finish() {
   if (finished) return; finished = true; listening = false; clearTimeout(silenceTimer); setMicUI(false);
@@ -399,12 +399,12 @@ function stopListening(drop) {
   if (drop) finish();
 }
 function setEngine(n) {
-  engine = n; $("engine").textContent = n === "dictation" ? "Claude 받아쓰기 사용 중" : n === "native" ? "브라우저 음성 인식 (en-US)" : "";
+  engine = n; micEl.dataset.engine = n || "none";   // "dictation" (Claude artifact) | "native" (Web Speech, en-US)
   if (!n) { micEl.disabled = true; showErr("이 브라우저는 음성 인식을 지원하지 않아요. Chrome·Edge·Safari에서 열어 주세요."); }
 }
 (async function initEngine() {
   if (inArtifact) {
-    micEl.disabled = true; $("engine").textContent = "음성 인식 준비 중…";
+    micEl.disabled = true;
     window.claude.use("downloads").then(d => { downloads = d; }).catch(() => {});
     let d = null; try { d = await window.claude.use("dictation"); } catch (e) {}
     micEl.disabled = false;
@@ -424,11 +424,10 @@ micEl.addEventListener("click", () => { if (!engine) return; listening ? stopLis
 $("prev").onclick = () => select(idx - 1);
 $("next").onclick = () => select(idx + 1);
 $("play").onclick = () => speak(0.95);
-$("playSlow").onclick = () => speak(0.65);
 $("hintBtn").onclick = () => { hintLv = (hintLv + 1) % 3; updateHintBtn(); paintCurWords(); };
 function updateAuto() { $("autoBtn").classList.toggle("on", autoNext); }
 $("autoBtn").onclick = () => { autoNext = !autoNext; ls.set(K.auto, autoNext); updateAuto(); };
-function updatePause() { $("pauseBtn").textContent = pauseMs ? `⏸ 쉼 ${pauseMs / 1000}초` : "⏸ 수동 종료"; $("pauseBtn").classList.toggle("on", !pauseMs); }
+function updatePause() { $("pauseBtn").textContent = pauseMs ? `⏸ ${pauseMs / 1000}초` : "⏸ 수동"; $("pauseBtn").title = pauseMs ? `${pauseMs / 1000}초 쉬면 채점` : "탭해야 채점"; $("pauseBtn").classList.toggle("on", !pauseMs); }
 $("pauseBtn").onclick = () => { const k = PAUSES.indexOf(pauseMs); pauseMs = PAUSES[(k + 1) % PAUSES.length]; ls.set(K.pause, pauseMs); updatePause(); if (listening) { setMicUI(true); armSilence(); } };
 document.addEventListener("keydown", e => {
   if (/TEXTAREA|INPUT/.test(e.target.tagName) || document.querySelector(".overlay.show,.modal.show")) return;

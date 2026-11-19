@@ -1,6 +1,6 @@
 {
   "name": "speakup",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "Speak Up: see the literal Korean, say the English — live speech recognition and word-by-word scoring. Static, local-first, no build.",
   "private": true,
   "type": "module",

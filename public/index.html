@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3.2.0">
+<link rel="stylesheet" href="style.css?v=3.3.0">
 </head>
 <body class="v-lib">
 
@@ -74,22 +74,17 @@
     <div class="result" id="result"><span class="score" id="score"></span><span><span id="msgT"></span> <span class="sub" id="msgS"></span></span></div>
     <div class="row">
       <button class="nav" id="prev" aria-label="이전 문장">‹</button>
-      <div class="center">
-        <button class="mic" id="mic" aria-label="말하기">
-          <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
-        </button>
-        <div class="hint" id="hint">탭해서 말하기</div>
-      </div>
+      <button class="mic" id="mic" aria-label="말하기">
+        <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+      </button>
       <button class="nav" id="next" aria-label="다음 문장">›</button>
     </div>
     <div class="tools">
       <button class="chip" id="hintBtn">💡 힌트</button>
       <button class="chip" id="play">🔊 듣기</button>
-      <button class="chip" id="playSlow">🐢 천천히</button>
-      <button class="chip" id="autoBtn">⏭ 자동 넘김</button>
-      <button class="chip" id="pauseBtn">⏸ 쉼 4초</button>
+      <button class="chip" id="autoBtn">⏭ 자동</button>
+      <button class="chip" id="pauseBtn">⏸ 4초</button>
     </div>
-    <div class="engine" id="engine"></div>
   </div></div>
 </section>
 
@@ -134,6 +129,6 @@
 <div class="modal" id="modal"><div class="mbox"><p id="mText"></p><div class="btns"><button class="btn sec" id="mNo">취소</button><button class="btn danger" id="mYes">삭제</button></div></div></div>
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=3.2.0"></script>
+<script type="module" src="js/app.js?v=3.3.0"></script>
 </body>
 </html>

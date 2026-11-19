@@ -75,17 +75,19 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 - Lists: reorder, multi-select delete, edit inside the dialogue, big textarea for adding.
 
 - Info page: no "perfect sentences" progress box and no unique-word / average-length stats (owner removed them); Start sits where the progress box was.
+- No login/auth: data never leaves the browser, so others visiting the site can't see it. Owner agreed (2026/11/19) to stay login-free; only revisit if server sync is added.
+- Player dock must stay compact: one row ‹ mic ›, one non-wrapping row of short chips (💡 힌트 · 🔊 듣기 · ⏭ 자동 · ⏸ N초). No slow-TTS button (removed), no engine/hint text lines.
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.2.0 — 2026/11/19**
+- **Current version: v3.3.0 — 2026/11/19**
 
 ## Changelog
+- v3.3.0 (2026/11/19): compact player dock — removed 🐢 천천히, chips on one non-wrapping row with shorter labels, smaller mic (60px) / nav buttons / result pill, dropped the hint and engine text lines (mic tooltip + `data-engine` instead).
 - v3.2.0 (2026/11/19): edit mode gains "N개 내보내기" — export only the selected dialogues (same MD/JSON sheet; a single dialogue gets its title in the filename).
 - v3.1.0 (2026/11/19): info page — removed the 완벽하게 말한 문장 box and the 고유 단어 / 평균 길이 tiles; Start/Resume buttons moved up into that spot (bottom bar removed); new 연습한 문장 tile counting every scored attempt per dialogue (`speakup.count.v3`).
 - v3.0.0 (2026/11/19): first repo release — library (reorder, multi-delete, add/edit, md/json import-export, 📋 AI prompt), info page, swipe-to-select player, hints on blanks only, Chrome auto-resume nudge, pause setting.
 
-- No login/auth: data never leaves the browser, so others visiting the site can't see it. Owner agreed (2026/11/19) to stay login-free; only revisit if server sync is added.
 
 ## Ideas not built yet
 - Pronunciation scoring (Azure Pronunciation Assessment needs a key + server proxy).
