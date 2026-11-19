@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speak Up — 영어 말하기 연습</title>
+<meta name="theme-color" content="#58CC02">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Speak Up">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=3.0.0">
+</head>
+<body class="v-lib">
+
+<!-- ================= LIBRARY ================= -->
+<section class="view on" id="libView">
+  <div class="top">
+    <div class="logo">Speak Up</div>
+    <div class="popwrap">
+      <button class="iconbtn" id="promptBtn" aria-expanded="false">📋 프롬프트</button>
+      <div class="pop" id="promptPop" role="dialog" aria-label="대화문 변환 프롬프트">
+        <div class="ph">AI에게 대화문 변환 요청하기 <span id="promptState">복사됨 ✓</span></div>
+        <pre id="promptText"></pre>
+        <button class="btn sec pbtn" id="promptCopy">다시 복사</button>
+      </div>
+    </div>
+    <button class="iconbtn" id="editModeBtn">✎ 편집</button>
+  </div>
+  <div class="libscroll"><div class="libin">
+    <div class="warn" id="storeWarn">이 브라우저에서는 저장이 안 돼요. 창을 닫으면 대화가 사라지니 내보내기로 백업하세요.</div>
+    <div id="dlist"></div>
+  </div></div>
+  <div class="libbar"><div class="in">
+    <div class="normalbar">
+      <button class="btn pri" id="addBtn">＋ 새 대화</button>
+      <button class="btn sec" id="importBtn">가져오기</button>
+      <button class="btn sec" id="exportBtn">내보내기</button>
+    </div>
+    <div class="editbar">
+      <button class="btn sec" id="selAllBtn">전체 선택</button>
+      <button class="btn danger" id="delSelBtn" disabled>삭제</button>
+    </div>
+  </div></div>
+  <input type="file" id="fileIn" accept=".json,.md,.markdown,.txt,application/json,text/markdown,text/plain" multiple hidden>
+</section>
+
+<!-- ================= INFO ================= -->
+<section class="view" id="infoView">
+  <div class="top">
+    <button class="iconbtn" id="infoBack">‹ 목록</button>
+    <div style="flex:1"></div>
+    <button class="iconbtn" id="infoEdit">✎ 수정</button>
+  </div>
+  <div class="infoscroll"><div class="infoin" id="infoBody"></div></div>
+  <div class="infobar"><div class="in" id="infoBtns"></div></div>
+</section>
+
+<!-- ================= PLAYER ================= -->
+<section class="view" id="playView">
+  <div class="top ptop">
+    <button class="iconbtn" id="backBtn" aria-label="정보로">‹</button>
+    <div class="ttl" id="ptitle"></div>
+    <div class="count" id="count"></div>
+    <button class="iconbtn" id="editDlgBtn" aria-label="대화 수정">✎</button>
+  </div>
+  <div class="bar"><i id="prog"></i></div>
+  <div id="script"><div class="inner" id="inner"></div></div>
+  <div class="dock"><div class="dock-in">
+    <div class="err" id="err"></div>
+    <div class="result" id="result"><span class="score" id="score"></span><span><span id="msgT"></span> <span class="sub" id="msgS"></span></span></div>
+    <div class="row">
+      <button class="nav" id="prev" aria-label="이전 문장">‹</button>
+      <div class="center">
+        <button class="mic" id="mic" aria-label="말하기">
+          <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+        </button>
+        <div class="hint" id="hint">탭해서 말하기</div>
+      </div>
+      <button class="nav" id="next" aria-label="다음 문장">›</button>
+    </div>
+    <div class="tools">
+      <button class="chip" id="hintBtn">💡 힌트</button>
+      <button class="chip" id="play">🔊 듣기</button>
+      <button class="chip" id="playSlow">🐢 천천히</button>
+      <button class="chip" id="autoBtn">⏭ 자동 넘김</button>
+      <button class="chip" id="pauseBtn">⏸ 쉼 4초</button>
+    </div>
+    <div class="engine" id="engine"></div>
+  </div></div>
+</section>
+
+<!-- ================= EDITOR SHEET ================= -->
+<div class="overlay" id="edOverlay">
+  <div class="sheet">
+    <h2 id="edTitle">새 대화 추가</h2>
+    <p>첫 줄은 <b># 제목</b>, 그다음부터 <b>영어 한 줄 → 한글 직역 한 줄</b>이 한 쌍이에요. 줄 앞의 <b>- </b>와 <b>이름:</b>은 있어도 없어도 돼요. <b>---</b>로 나누면 여러 대화를 한 번에 추가해요.</p>
+    <pre># 주간 회의
+- Sammy: Good morning, everyone.
+- 좋은 아침입니다, 여러분.
+---
+# 다음 대화 …</pre>
+    <textarea id="editor" spellcheck="false" placeholder="여기에 붙여 넣으세요"></textarea>
+    <div class="ferr" id="edErr"></div>
+    <div class="btns">
+      <button class="btn danger" id="edDelete" style="flex:.6">삭제</button>
+      <button class="btn sec" id="edCancel">취소</button>
+      <button class="btn pri" id="edSave">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EXPORT SHEET ================= -->
+<div class="overlay" id="exOverlay">
+  <div class="sheet">
+    <h2>내보내기</h2>
+    <p id="exInfo"></p>
+    <div class="seg">
+      <button class="chip on" id="exMd">Markdown (.md)</button>
+      <button class="chip" id="exJson">JSON (.json)</button>
+    </div>
+    <textarea id="exText" readonly></textarea>
+    <div class="btns">
+      <button class="btn sec" id="exClose">닫기</button>
+      <button class="btn sec" id="exCopy">복사</button>
+      <button class="btn pri" id="exDown">파일로 저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal"><div class="mbox"><p id="mText"></p><div class="btns"><button class="btn sec" id="mNo">취소</button><button class="btn danger" id="mYes">삭제</button></div></div></div>
+<div class="toast" id="toast"></div>
+
+<script type="module" src="js/app.js?v=3.0.0"></script>
+</body>
+</html>

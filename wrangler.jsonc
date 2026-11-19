@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "speakup",
+  "compatibility_date": "2026-06-25",
+  // speakup.kappy.app (kappy.app zone is on the same Cloudflare account). The workers.dev address stays open too.
+  "routes": [
+    { "pattern": "speakup.kappy.app", "custom_domain": true }
+  ],
+  "workers_dev": true,
+  // Static only: no Worker script, no KV/D1. Everything is served from public/ as-is (no build step).
+  "assets": {
+    "directory": "public",
+    "not_found_handling": "single-page-application"
+  }
+}
