@@ -33,7 +33,7 @@ wrangler.jsonc           Cloudflare Worker (static assets only, custom domain sp
 - Player: vertical script. Current line centred (big, Korean + masked English word slots + "heard" box); previous lines above show English only if attempted (this session, or a best score exists) — an unattempted past line shows Korean only, because the English is the answer; next lines below show Korean only, faded. Free swipe/wheel scroll with CSS `scroll-snap`; when scrolling settles (`onScrollSettle`, 130 ms debounce) the line nearest the centre becomes current. Programmatic scrolls set `progScrollUntil` so they don't re-trigger selection.
 
 ## Masking / hint rules (player)
-Before/while speaking, a word of the current line is a blank slot (`.w.hid`) until it is said correctly (live → green). After an attempt is scored **every answer word is shown**: correct = green; wrong / missed = the answer word in normal ink, exactly as the 👀 정답 hint shows it, on a light-red slot with a red underline (no strikethrough, no red text), plus the heard word underneath for substitutions. Owner wants the right answer readable in place of the mistake. Tapping the mic again clears the attempt and re-blanks the line. 💡 cycles: 0 blanks → 1 first letter on blanks only → 2 show answer. Hint resets to 0 when the line changes.
+Before/while speaking, a word of the current line is a blank slot (`.w.hid`) until it is said correctly (live → green). After an attempt is scored **every answer word is shown**: correct = green; wrong / missed = the answer word in normal ink, exactly as the 👀 정답 hint shows it, on a light-red slot with a red underline (no strikethrough, no red text), plus the heard word underneath for substitutions. Owner wants the right answer readable in place of the mistake. Tapping the mic again clears the attempt and re-blanks the line. 💡 cycles: 0 blanks → 1 first letter on blanks only → 2 show answer. Hint resets to 0 when the line changes **and when a sentence is scored** (matters in keep mode, where you retry on the same line).
 
 ## Scoring (core.js)
 - `tokenize()` normalizes both sides: money (`$8.50` → 8 dollars and 50 cents), lowercase, strip punctuation, expand contractions (I've→i have), numbers <100 → words, `%` → percent, hyphens removed (off-peak→offpeak), `'s` → `s` token. Each token keeps the index of its display word.
@@ -46,7 +46,7 @@ Before/while speaking, a word of the current line is a blank slot (`.w.hid`) unt
 - **Browser** (kappy.app, localhost): Web Speech API, `lang=en-US`, `continuous`, `interimResults`, `maxAlternatives=3` (final results pick the alternative overlapping the answer most). Chrome ends a session by itself after silence → `onend` restarts it, keeps text in `baseText`, and shows a toast nudge "🔄 인식이 잠깐 끊겨서…". Fatal errors (not-allowed, network) set `stopRequested` so it doesn't loop.
 - **Claude artifact** (the owner also previews it as a claude.ai artifact): the sandbox blocks the mic, so it uses `window.claude.use("dictation")` (declared capability) and `use("downloads")` for Save file. Detected via `window.claude.use`. Don't remove this branch.
 - **유지 (keep) button** next to the mic (`keepOn`, `speakup.keep.v3`): one recognition session stays open across sentences (also means fewer iOS start/stop chimes). When a sentence completes (`sentenceDone`: all matched or pause ran out) it scores, then `resetCapture()` starts a fresh capture in the same session — native skips results before index `consumed`; dictation drops the rest of an in-progress phrase (`skipNextFinal`). While waiting for auto-advance, `gated` ignores speech. Speaking again on a scored line starts a new attempt. `select()` keeps the session in keep mode. Tap the mic to turn it off; end of script at 100% stops it.
-- Pause handling: ⏸ chip cycles 2s / 4s (default) / 7s / manual. After that much silence (with some speech) it stops and scores; manual = only a tap stops it.
+- Ending a sentence: all words matched → scores at once; **✅ 완료** chip (or Enter) scores what was said so far (blanks may stay unfilled); mic tap stops and scores; otherwise 30 s of silence after some speech (`PAUSE_MS`, fixed — the ⏸ setting chip was removed). In keep mode each of these scores and keeps listening.
 - Firefox has no Web Speech recognition → mic disabled with a message.
 
 ## Data (localStorage only — no server)
@@ -57,7 +57,7 @@ Before/while speaking, a word of the current line is a blank slot (`.w.hid`) unt
 | `speakup.pos.v3` | `{dialogId: lastLineIndex}` (Resume button) |
 | `speakup.count.v3` | `{dialogId: n}` — +1 on every scored attempt (retries count too); shown as 연습한 문장 on the info page and in the library card |
 | `speakup.last.v3` | `{dialogId: ms}` — time of the last scored attempt; library card shows it as 오늘 / 어제 / N일 전 / M월 D일 (`relDate`) |
-| `speakup.auto.v3`, `speakup.pause.v3` | settings |
+| `speakup.auto.v3`, `speakup.keep.v3` | settings (`speakup.pause.v3` is obsolete) |
 First run seeds the sample dialogue (`SAMPLE_MD`) — the same in every browser, it is not the owner's data. Keep the sample generic: no work/company content (owner asked to replace the old team-meeting sample). On load, an unedited old sample (matched by `OLD_SAMPLE`) is swapped for the current one. If storage throws, a warning banner tells the user to export.
 Data is per browser **and per origin** (artifact vs localhost vs kappy.app are separate). Lost on clearing site data, private mode, Safari's 7-day eviction of non-home-screen sites. Export is the backup. If cross-device sync is ever wanted, it needs a server (e.g. Cloudflare KV/D1) — not built.
 
@@ -80,13 +80,14 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 - Info page: no "perfect sentences" progress box and no unique-word / average-length stats (owner removed them); Start sits where the progress box was.
 - No login/auth: data never leaves the browser, so others visiting the site can't see it. Owner agreed (2026/11/19) to stay login-free; only revisit if server sync is added.
-- Player dock must stay compact: one row ‹ mic 유지 ›, one non-wrapping row of short chips (💡 힌트 · 🔊 듣기 · ⏭ 자동 · ⏸ N초). No slow-TTS button (removed), no engine/hint text lines.
+- Player dock: chips row **above** the mic row (owner taps them a lot): 💡 힌트 · 🔊 듣기 · ⏭ 자동 · ✅ 완료 (one non-wrapping row), then ‹ mic 유지 ›. About 170 px tall with ~30 px bottom padding so the mic isn't glued to the bottom edge — not cramped, not the original ~200 px. No slow-TTS, no pause chip, no engine/hint text lines.
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.7.0 — 2026/11/19**
+- **Current version: v3.8.0 — 2026/11/19**
 
 ## Changelog
+- v3.8.0 (2026/11/19): dock roomier (~1.5×) with chips moved above the mic and more bottom padding; ✅ 완료 chip scores what was said so far; pause fixed at 30 s and the ⏸ chip removed; hint resets after each scored sentence.
 - v3.7.0 (2026/11/19): 유지 button keeps the mic on across sentences (score → fresh capture in the same session). Past lines no longer reveal English unless attempted.
 - v3.6.1 (2026/11/19): wrong/missed words show the answer in normal ink (like the 정답 hint) on a red-underlined slot — no strikethrough, no red text.
 - v3.6.0 (2026/11/19): after scoring, wrong and missed words now reveal the correct answer word (red / strikethrough) instead of staying blank; the heard word stays underneath.

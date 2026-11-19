@@ -93,7 +93,7 @@
   .h{padding:0 2px;border-radius:5px}
   .h.ok{color:var(--green-d)} .h.bad{color:var(--red-d);background:var(--red-l)} .h.extra{color:var(--orange-d);background:var(--orange-l);text-decoration:line-through}
 
-  .dock{flex:none;border-top:2px solid var(--line);background:#fff;padding:8px 14px calc(8px + env(safe-area-inset-bottom))}
+  .dock{flex:none;border-top:2px solid var(--line);background:#fff;padding:14px 14px calc(30px + env(safe-area-inset-bottom))}
   .dock-in{max-width:680px;margin:0 auto}
   .err{display:none;background:var(--red-l);color:var(--red-d);font-weight:800;border-radius:10px;padding:7px 10px;margin-bottom:8px;font-size:12.5px}
   .err.show{display:block}
@@ -108,23 +108,26 @@
   .nav{width:46px;height:44px;border-radius:14px;border:2px solid var(--line);border-bottom-width:4px;background:#fff;font-size:20px;font-weight:900;color:var(--muted);cursor:pointer}
   .nav:active{border-bottom-width:2px;transform:translateY(3px)}
   .center{display:flex;flex-direction:column;align-items:center;gap:6px}
-  .mic{width:60px;height:60px;border-radius:50%;border:none;background:var(--green);box-shadow:0 4px 0 var(--green-d);cursor:pointer;display:grid;place-items:center;transition:transform .08s,box-shadow .08s,background .2s}
+  .mic{width:66px;height:66px;border-radius:50%;border:none;background:var(--green);box-shadow:0 4px 0 var(--green-d);cursor:pointer;display:grid;place-items:center;transition:transform .08s,box-shadow .08s,background .2s}
   .mic:active{transform:translateY(4px);box-shadow:0 1px 0 var(--green-d)}
   .micgrp{display:flex;align-items:center;gap:10px}
   .keepsp{width:44px}
   .keep{width:44px;height:36px;border-radius:12px;border:2px solid var(--line);border-bottom-width:3px;background:#fff;color:var(--muted);font-weight:900;font-size:12.5px;cursor:pointer;padding:0}
   .keep:active{border-bottom-width:2px;transform:translateY(1px)}
   .keep.on{background:var(--blue-l);border-color:#84D8FF;color:var(--blue-d)}
-  .mic svg{width:28px;height:28px;fill:#fff}
+  .mic svg{width:30px;height:30px;fill:#fff}
+  .chip.done{color:var(--green-d)}
+  .chip.done:not(:disabled){background:var(--green-l);border-color:#9BE15D}
+  .chip:disabled{opacity:.4;cursor:default;transform:none;border-bottom-width:3px}
   .mic.rec{background:var(--red);box-shadow:0 4px 0 var(--red-d);animation:pulse 1.3s infinite}
   .mic:disabled{background:#E5E5E5;box-shadow:0 4px 0 #CECECE;cursor:not-allowed;animation:none}
   .mic.blip{animation:blip .5s}
   @keyframes pulse{0%{outline:0 solid rgba(255,75,75,.35)}70%{outline:16px solid rgba(255,75,75,0)}100%{outline:0 solid rgba(255,75,75,0)}}
   @keyframes blip{0%,100%{transform:none}30%{transform:scale(.9)}60%{transform:scale(1.06)}}
   .hint{font-weight:800;color:var(--muted);font-size:12px}
-  .tools{display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .tools{display:flex;gap:6px;justify-content:center;margin-bottom:16px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
   .tools::-webkit-scrollbar{display:none}
-  .chip{flex:none;border:2px solid var(--line);border-bottom-width:3px;background:#fff;border-radius:11px;padding:4px 10px;font-weight:800;font-size:12.5px;color:var(--blue);cursor:pointer;white-space:nowrap}
+  .chip{flex:none;border:2px solid var(--line);border-bottom-width:3px;background:#fff;border-radius:11px;padding:6px 11px;font-weight:800;font-size:13px;color:var(--blue);cursor:pointer;white-space:nowrap}
   .chip:active{border-bottom-width:2px;transform:translateY(2px)}
   .chip.on{background:var(--blue-l);border-color:#84D8FF;color:var(--blue-d)}
 
@@ -132,7 +135,7 @@
   .toast{position:fixed;left:50%;bottom:calc(30px + env(safe-area-inset-bottom));transform:translate(-50%,8px);background:var(--ink);color:#fff;font-weight:800;font-size:13px;padding:9px 16px;border-radius:99px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;box-shadow:0 4px 14px rgba(0,0,0,.18);z-index:50}
   .toast.show{opacity:1;transform:translate(-50%,0)}
   body.v-lib .toast{bottom:calc(96px + env(safe-area-inset-bottom))}
-  body.v-play .toast{bottom:calc(130px + env(safe-area-inset-bottom))}
+  body.v-play .toast{bottom:calc(200px + env(safe-area-inset-bottom))}
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:flex-end;justify-content:center;z-index:20}
   .overlay.show{display:flex}
   .sheet{background:#fff;width:100%;max-width:680px;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:94vh;max-height:94dvh;display:flex;flex-direction:column;overflow-y:auto}

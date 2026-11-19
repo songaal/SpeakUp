@@ -3,7 +3,7 @@ import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, a
 import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT } from "./content.js";
 
 /* ================= store (localStorage) ================= */
-const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3", count: "speakup.count.v3", last: "speakup.last.v3", auto: "speakup.auto.v3", keep: "speakup.keep.v3", pause: "speakup.pause.v3" };
+const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3", count: "speakup.count.v3", last: "speakup.last.v3", auto: "speakup.auto.v3", keep: "speakup.keep.v3" };
 let storageOK = true;
 try { localStorage.setItem("speakup.probe", "1"); localStorage.removeItem("speakup.probe"); } catch (e) { storageOK = false; }
 const ls = {
@@ -25,8 +25,7 @@ let countMap = ls.get(K.count, {});            // dialogId → total sentences p
 let lastMap = ls.get(K.last, {});              // dialogId → timestamp (ms) of the last scored attempt
 let autoNext = ls.get(K.auto, true);
 let keepOn = ls.get(K.keep, false);           // 유지: mic stays on across sentences (one recognition session → fewer iOS chimes)
-const PAUSES = [2000, 4000, 7000, 0];          // 0 = manual stop only
-let pauseMs = ls.get(K.pause, 4000);
+const PAUSE_MS = 30000;                        // silence (after some speech) that ends a sentence; ✅ 완료 / mic tap end it sooner
 const saveLib = () => ls.set(K.lib, lib);
 const bestOf = (d, l) => best[d.id + "|" + l.en];
 function relDate(ms) {                         // 오늘 / 어제 / N일 전 (≤6) / M월 D일 / YYYY. M. D.
@@ -335,6 +334,7 @@ function evaluate() {
   const r = scoreAttempt(lines[idx].en, said);
   const heardHTML = `<span class="label">YOU SAID</span>` + r.heard.map(h => `<span class="h ${h.st}">${esc(h.w)}</span>`).join(" ");
   attempts[idx] = { st: r.st, said: r.said, score: r.score, heardHTML };
+  hintLv = 0; updateHintBtn();                                   // hint resets once the sentence is scored
   countMap[dlg.id] = (countMap[dlg.id] || 0) + 1; ls.set(K.count, countMap);
   lastMap[dlg.id] = Date.now(); ls.set(K.last, lastMap);
   const key = dlg.id + "|" + lines[idx].en; if (best[key] == null || r.score > best[key]) { best[key] = r.score; ls.set(K.best, best); }
@@ -349,7 +349,7 @@ function evaluate() {
     autoTimer = setTimeout(() => { if (view === "play" && idx === at && (keepOn || !listening)) select(idx + 1); else gated = false; }, 1400);
   } else if (keepOn && listening && r.score === 100 && idx === lines.length - 1) stopListening(true);   // end of script
 }
-function setMicUI(on) { micEl.classList.toggle("rec", on); micEl.title = on ? (keepOn ? "계속 듣는 중… 탭하면 마이크 끔" : pauseMs ? "말하는 중… 탭하면 끝" : "말하는 중… 다 말하면 탭") : "탭해서 말하기"; micEl.setAttribute("aria-label", micEl.title); }
+function setMicUI(on) { micEl.classList.toggle("rec", on); micEl.title = on ? (keepOn ? "계속 듣는 중… 탭하면 마이크 끔" : "말하는 중… 탭하면 채점") : "탭해서 말하기"; updateDone(); micEl.setAttribute("aria-label", micEl.title); }
 function showErr(m) { errEl.textContent = m; errEl.className = "err show"; }
 function finish() {
   if (finished) return; finished = true; listening = false; clearTimeout(silenceTimer); setMicUI(false);
@@ -377,10 +377,12 @@ let skipNextFinal = false;         // dictation: drop the rest of a phrase that 
 let gated = false;                 // keep mode: ignore speech while waiting for auto-advance
 function resetCapture() {
   consumed = lastLen; skipNextFinal = !!interimText.trim();
-  finalText = ""; interimText = ""; baseText = ""; liveSt = null;
+  finalText = ""; interimText = ""; baseText = ""; liveSt = null; updateDone();
 }
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-function armSilence() { clearTimeout(silenceTimer); if (pauseMs && (finalText + interimText).trim()) silenceTimer = setTimeout(sentenceDone, pauseMs); }
+function armSilence() { clearTimeout(silenceTimer); updateDone(); if ((finalText + interimText).trim()) silenceTimer = setTimeout(sentenceDone, PAUSE_MS); }
+// ✅ 완료: score what has been said so far (not every blank has to be filled). Enabled while listening with some speech.
+function updateDone() { $("doneBtn").disabled = !(listening && !gated && (finalText + interimText).trim()); }
 function nativeStart() {
   rec = new SR(); rec.lang = "en-US"; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 3;
   consumed = 0; lastLen = 0;
@@ -465,8 +467,7 @@ function updateKeep() { $("keepBtn").classList.toggle("on", keepOn); $("keepBtn"
 $("keepBtn").onclick = () => { keepOn = !keepOn; ls.set(K.keep, keepOn); updateKeep(); setMicUI(listening); toast(keepOn ? "마이크를 계속 켜 둬요. 끄려면 마이크를 누르세요" : "문장마다 마이크를 켜고 꺼요"); };
 function updateAuto() { $("autoBtn").classList.toggle("on", autoNext); }
 $("autoBtn").onclick = () => { autoNext = !autoNext; ls.set(K.auto, autoNext); updateAuto(); };
-function updatePause() { $("pauseBtn").textContent = pauseMs ? `⏸ ${pauseMs / 1000}초` : "⏸ 수동"; $("pauseBtn").title = pauseMs ? `${pauseMs / 1000}초 쉬면 채점` : "탭해야 채점"; $("pauseBtn").classList.toggle("on", !pauseMs); }
-$("pauseBtn").onclick = () => { const k = PAUSES.indexOf(pauseMs); pauseMs = PAUSES[(k + 1) % PAUSES.length]; ls.set(K.pause, pauseMs); updatePause(); if (listening) { setMicUI(true); armSilence(); } };
+$("doneBtn").onclick = () => { if (listening) sentenceDone(); };
 document.addEventListener("keydown", e => {
   if (/TEXTAREA|INPUT/.test(e.target.tagName) || document.querySelector(".overlay.show,.modal.show")) return;
   if (e.key === "Escape") { setPrompt(false); if (view === "play") $("backBtn").click(); else if (view === "info") goLibrary(); return; }
@@ -475,8 +476,9 @@ document.addEventListener("keydown", e => {
   else if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); select(idx + 1); }
   else if (e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); select(idx - 1); }
   else if (e.key === "h" || e.key === "H") $("hintBtn").click();
+  else if (e.key === "Enter") $("doneBtn").click();
   else if (e.key === "l" || e.key === "L") speak(0.95);
 });
 window.addEventListener("resize", () => { if (view === "play") centerCurrent(false); });
 
-updateHintBtn(); updateAuto(); updatePause(); updateKeep(); renderLib();
+updateHintBtn(); updateAuto(); updateKeep(); renderLib();
