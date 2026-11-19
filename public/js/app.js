@@ -335,6 +335,7 @@ function evaluate() {
   const heardHTML = `<span class="label">YOU SAID</span>` + r.heard.map(h => `<span class="h ${h.st}">${esc(h.w)}</span>`).join(" ");
   attempts[idx] = { st: r.st, said: r.said, score: r.score, heardHTML };
   hintLv = 0; updateHintBtn();                                   // hint resets once the sentence is scored
+  if (r.score === 100) chime();
   countMap[dlg.id] = (countMap[dlg.id] || 0) + 1; ls.set(K.count, countMap);
   lastMap[dlg.id] = Date.now(); ls.set(K.last, lastMap);
   const key = dlg.id + "|" + lines[idx].en; if (best[key] == null || r.score > best[key]) { best[key] = r.score; ls.set(K.best, best); }
@@ -348,6 +349,22 @@ function evaluate() {
     const at = idx; if (keepOn && listening) gated = true;      // ignore speech until the next line is up
     autoTimer = setTimeout(() => { if (view === "play" && idx === at && (keepOn || !listening)) select(idx + 1); else gated = false; }, 1400);
   } else if (keepOn && listening && r.score === 100 && idx === lines.length - 1) stopListening(true);   // end of script
+}
+/* ---- success chime: a short rising two-note tone synthesized with Web Audio (no audio file) on a 100% sentence.
+ * The AudioContext is created/resumed on the mic tap (a user gesture) so iOS lets it play later. */
+let actx = null;
+function unlockAudio() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch (e) {} }
+function chime() {
+  if (!actx) return;
+  try {
+    const t0 = actx.currentTime + 0.01;
+    [[784, 0], [1175, 0.11]].forEach(([f, dt]) => {               // G5 → D6
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t0 + dt); g.gain.linearRampToValueAtTime(0.25, t0 + dt + 0.015); g.gain.exponentialRampToValueAtTime(0.001, t0 + dt + 0.32);
+      o.connect(g).connect(actx.destination); o.start(t0 + dt); o.stop(t0 + dt + 0.35);
+    });
+  } catch (e) {}
 }
 function setMicUI(on) { micEl.classList.toggle("rec", on); micEl.title = on ? (keepOn ? "계속 듣는 중… 탭하면 마이크 끔" : "말하는 중… 탭하면 채점") : "탭해서 말하기"; updateDone(); micEl.setAttribute("aria-label", micEl.title); }
 function showErr(m) { errEl.textContent = m; errEl.className = "err show"; }
@@ -458,7 +475,7 @@ function setEngine(n) {
 })();
 
 /* ---- player controls ---- */
-micEl.addEventListener("click", () => { if (!engine) return; listening ? stopListening() : startListening(); });
+micEl.addEventListener("click", () => { unlockAudio(); if (!engine) return; listening ? stopListening() : startListening(); });
 $("prev").onclick = () => select(idx - 1);
 $("next").onclick = () => select(idx + 1);
 $("play").onclick = () => speak(0.95);
@@ -467,7 +484,7 @@ function updateKeep() { $("keepBtn").classList.toggle("on", keepOn); $("keepBtn"
 $("keepBtn").onclick = () => { keepOn = !keepOn; ls.set(K.keep, keepOn); updateKeep(); setMicUI(listening); toast(keepOn ? "마이크를 계속 켜 둬요. 끄려면 마이크를 누르세요" : "문장마다 마이크를 켜고 꺼요"); };
 function updateAuto() { $("autoBtn").classList.toggle("on", autoNext); }
 $("autoBtn").onclick = () => { autoNext = !autoNext; ls.set(K.auto, autoNext); updateAuto(); };
-$("doneBtn").onclick = () => { if (listening) sentenceDone(); };
+$("doneBtn").onclick = () => { unlockAudio(); if (listening) sentenceDone(); };
 document.addEventListener("keydown", e => {
   if (/TEXTAREA|INPUT/.test(e.target.tagName) || document.querySelector(".overlay.show,.modal.show")) return;
   if (e.key === "Escape") { setPrompt(false); if (view === "play") $("backBtn").click(); else if (view === "info") goLibrary(); return; }

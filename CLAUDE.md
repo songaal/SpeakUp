@@ -47,6 +47,7 @@ Before/while speaking, a word of the current line is a blank slot (`.w.hid`) unt
 - **Claude artifact** (the owner also previews it as a claude.ai artifact): the sandbox blocks the mic, so it uses `window.claude.use("dictation")` (declared capability) and `use("downloads")` for Save file. Detected via `window.claude.use`. Don't remove this branch.
 - **유지 (keep) button** next to the mic (`keepOn`, `speakup.keep.v3`): one recognition session stays open across sentences (also means fewer iOS start/stop chimes). When a sentence completes (`sentenceDone`: all matched or pause ran out) it scores, then `resetCapture()` starts a fresh capture in the same session — native skips results before index `consumed`; dictation drops the rest of an in-progress phrase (`skipNextFinal`). While waiting for auto-advance, `gated` ignores speech. Speaking again on a scored line starts a new attempt. `select()` keeps the session in keep mode. Tap the mic to turn it off; end of script at 100% stops it.
 - Ending a sentence: all words matched → scores at once; **✅ 완료** chip (or Enter) scores what was said so far (blanks may stay unfilled); mic tap stops and scores; otherwise 30 s of silence after some speech (`PAUSE_MS`, fixed — the ⏸ setting chip was removed). In keep mode each of these scores and keeps listening.
+- 100% sentence → `chime()`: short rising two-note sine tone made with Web Audio (no file, original — not Duolingo's asset). AudioContext is unlocked on the mic / 완료 tap for iOS. Unverified on iPhone while the mic is open (iOS may duck or route it to the earpiece).
 - Firefox has no Web Speech recognition → mic disabled with a message.
 
 ## Data (localStorage only — no server)
@@ -84,9 +85,10 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.8.0 — 2026/11/19**
+- **Current version: v3.9.0 — 2026/11/19**
 
 ## Changelog
+- v3.9.0 (2026/11/19): success chime on a 100% sentence (Web Audio two-note tone).
 - v3.8.0 (2026/11/19): dock roomier (~1.5×) with chips moved above the mic and more bottom padding; ✅ 완료 chip scores what was said so far; pause fixed at 30 s and the ⏸ chip removed; hint resets after each scored sentence.
 - v3.7.0 (2026/11/19): 유지 button keeps the mic on across sentences (score → fresh capture in the same session). Past lines no longer reveal English unless attempted.
 - v3.6.1 (2026/11/19): wrong/missed words show the answer in normal ink (like the 정답 hint) on a red-underlined slot — no strikethrough, no red text.
