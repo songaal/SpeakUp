@@ -84,7 +84,9 @@ const TENS = {30:"thirty",40:"forty",50:"fifty",60:"sixty",70:"seventy",80:"eigh
 function numWords(n) { n = +n; if (n <= 20) return NUM[n]; if (n < 100) { const t = Math.floor(n / 10) * 10, o = n % 10; return (t === 20 ? "twenty" : TENS[t]) + (o ? " " + NUM[o] : ""); } return String(n); }
 
 export function tokenize(text) {
-  const words = String(text).trim().split(/\s+/).filter(Boolean), toks = [];
+  // "$8.50" → "8 dollars and 50 cents", "$8" → "8 dollars" (recognizers write money with symbols)
+  text = String(text).replace(/\$(\d+)(?:\.(\d{1,2}))?/g, (_, d, c) => `${d} dollars` + (c && +c ? ` and ${+c} cents` : ""));
+  const words = text.trim().split(/\s+/).filter(Boolean), toks = [];
   words.forEach((w, wi) => {
     const s = w.toLowerCase().replace(/[’‘`]/g, "'").replace(/%/g, " percent ").replace(/[^a-z0-9' ]/g, "").replace(/^'+|'+$/g, "");
     s.split(" ").forEach(part => {

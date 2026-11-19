@@ -1,44 +1,43 @@
 // Built-in content: the sample dialogue and the "make a script with AI" prompt.
 
-export const SAMPLE_MD = `# 검색인프라팀 주간회의
-- Sammy: Good morning, everyone. Let's get started with our weekly meeting.
-- 좋은 아침입니다, 여러분. 우리의 주간 회의를 시작합시다.
-- Sammy: First, let's go over the action items from last week.
-- 먼저, 지난주로부터의 액션 아이템들을 검토합시다.
-- Jin: The indexing pipeline migration is about eighty percent done.
-- 인덱싱 파이프라인 마이그레이션은 약 80퍼센트 완료되었습니다.
-- Jin: We expect to finish it by the end of next week.
-- 우리는 그것을 다음 주의 끝까지 끝낼 것을 예상합니다.
-- Sammy: Great. Were there any issues during the rollout?
-- 좋습니다. 롤아웃 동안에 어떤 문제들이 있었나요?
-- Jin: We had one incident on Tuesday, but it was resolved within an hour.
-- 우리는 화요일에 하나의 장애를 가졌지만, 그것은 한 시간 이내에 해결되었습니다.
-- Sammy: Please share the RCA document with the team by Friday.
-- 금요일까지 RCA 문서를 팀과 공유해 주세요.
-- Mina: Moving on to cost, we saw a spike in compute usage last Thursday.
-- 비용으로 넘어가서, 우리는 지난 목요일에 컴퓨트 사용량에서 급증을 보았습니다.
-- Mina: It was caused by a full reindex of the Eats corpus.
-- 그것은 Eats 코퍼스의 전체 재색인에 의해 야기되었습니다.
-- Sammy: Can we schedule full reindexes during off-peak hours from now on?
-- 우리가 지금부터 전체 재색인들을 피크가 아닌 시간들 동안에 예약할 수 있을까요?
-- Mina: Sure, I'll talk to the Eats team and set it up.
-- 물론이죠, 제가 Eats 팀에게 이야기하고 그것을 설정하겠습니다.
-- Kevin: From the Taiwan side, query latency has improved by fifteen percent.
-- 대만 쪽으로부터, 쿼리 지연 시간이 15퍼센트만큼 개선되었습니다.
-- Sammy: That's impressive. What made the biggest difference?
-- 그것은 인상적입니다. 무엇이 가장 큰 차이를 만들었나요?
-- Kevin: We tuned the cache settings and removed some unused fields from the index.
-- 우리는 캐시 설정들을 조정했고 인덱스로부터 몇몇 사용되지 않는 필드들을 제거했습니다.
-- Sammy: Nice work. Let's apply the same changes to the other corpora.
-- 좋은 작업입니다. 같은 변경들을 다른 코퍼스들에 적용합시다.
-- Sammy: Also, the Reco team asked for a new field in the product index.
-- 또한, Reco 팀이 상품 인덱스 안에 새로운 필드를 요청했습니다.
-- Jin: I can take that one. Do we have a deadline?
-- 제가 그것을 맡을 수 있습니다. 우리는 마감일을 가지고 있나요?
-- Sammy: They need it before the end of the month.
-- 그들은 그것을 그 달의 끝 전에 필요로 합니다.
-- Sammy: Okay, I think that covers everything. Thanks for your hard work, everyone.
-- 좋아요, 저는 그것이 모든 것을 다룬다고 생각합니다. 여러분의 힘든 일에 대해 감사합니다.`;
+export const SAMPLE_MD = `# 카페에서 커피 주문하기
+- Barista: Hi there! What can I get for you today?
+- 안녕하세요! 오늘 제가 당신을 위해 무엇을 가져다 드릴 수 있을까요?
+- Customer: Hi, can I get an iced americano, please?
+- 안녕하세요, 제가 아이스 아메리카노 하나를 얻을 수 있을까요, 부탁합니다?
+- Barista: Sure. What size would you like?
+- 물론이죠. 당신은 어떤 사이즈를 원하시나요?
+- Customer: A medium, please.
+- 중간 것 하나, 부탁합니다.
+- Barista: Would you like an extra shot of espresso?
+- 당신은 에스프레소의 추가 샷 하나를 원하시나요?
+- Customer: No, thanks. But could I get it with less ice?
+- 아니요, 감사합니다. 하지만 제가 그것을 더 적은 얼음과 함께 얻을 수 있을까요?
+- Barista: No problem. Is that for here or to go?
+- 문제없습니다. 그것은 여기를 위한 것인가요 아니면 가지고 가는 것인가요?
+- Customer: To go, please.
+- 가지고 가는 것으로, 부탁합니다.
+- Barista: Can I get you anything else?
+- 제가 당신에게 다른 무언가를 가져다 드릴 수 있을까요?
+- Customer: Yes, I'll also have a blueberry muffin.
+- 네, 저는 또한 블루베리 머핀 하나를 먹겠습니다.
+- Barista: Would you like me to warm it up?
+- 당신은 제가 그것을 데우기를 원하시나요?
+- Customer: Yes, please. How much is it all together?
+- 네, 부탁합니다. 그것은 모두 합쳐서 얼마인가요?
+- Barista: That comes to eight dollars and fifty cents.
+- 그것은 8달러 그리고 50센트가 됩니다.
+- Customer: Can I pay by card?
+- 제가 카드로 지불할 수 있나요?
+- Barista: Of course. Just tap your card here.
+- 물론이죠. 그냥 당신의 카드를 여기에 대세요.
+- Barista: Your order will be ready in a few minutes.
+- 당신의 주문은 몇 분 안에 준비될 것입니다.
+- Customer: Great, thank you so much!
+- 좋아요, 정말 많이 감사합니다!`;
+
+// The sample shipped before v3.4.0. Browsers that still hold it unedited get it swapped for SAMPLE_MD (see app.js).
+export const OLD_SAMPLE = { title: "검색인프라팀 주간회의", firstEn: "Good morning, everyone. Let's get started with our weekly meeting.", lines: 19 };
 
 // Shown by the 📋 프롬프트 button in the library and copied to the clipboard.
 export const CONVERT_PROMPT = `아래 영어 텍스트(대화문, 뉴스, 아티클 등 — 텍스트 또는 이미지)를 영어 말하기 연습 앱에 넣을 수 있는 형식으로 변환해 줘.
@@ -63,11 +62,11 @@ export const CONVERT_PROMPT = `아래 영어 텍스트(대화문, 뉴스, 아티
 - 본문과 상관없는 머리말, 기자 이름, 날짜, 사진 설명, 페이지 번호, 광고 문구는 빼.
 
 [예시 — 대화문]
-# 주간 회의
-Sammy: Good morning, everyone.
-좋은 아침입니다, 여러분.
-Jin: The migration is about eighty percent done.
-마이그레이션은 약 80퍼센트 완료되었습니다.
+# 카페에서 주문하기
+Barista: What size would you like?
+당신은 어떤 사이즈를 원하시나요?
+Customer: A medium, please.
+중간 것 하나, 부탁합니다.
 
 [예시 — 뉴스/아티클]
 # 금리 동결

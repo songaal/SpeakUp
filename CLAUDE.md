@@ -18,7 +18,7 @@ public/index.html        markup for all views + sheets (library, info, player, e
 public/style.css         all styles
 public/js/app.js         UI + state + speech engines (entry, ES module)
 public/js/core.js        pure logic, no DOM: md/json parse+serialize, tokenize, align, score, stats  ← unit-tested
-public/js/content.js     SAMPLE_MD (default dialogue) and CONVERT_PROMPT (📋 프롬프트 button text)
+public/js/content.js     SAMPLE_MD (default dialogue: ordering coffee at a café), OLD_SAMPLE fingerprint, CONVERT_PROMPT (📋 프롬프트 button text)
 public/manifest.webmanifest, public/icons/   PWA metadata + icons (icon.svg → PNGs via rsvg-convert)
 tests/core.test.mjs      node:test suite for core.js
 wrangler.jsonc           Cloudflare Worker (static assets only, custom domain speakup.kappy.app)
@@ -35,7 +35,7 @@ wrangler.jsonc           Cloudflare Worker (static assets only, custom domain sp
 A word of the current line is shown only if: said correctly (live or in the last attempt), hint level 2, or the attempt scored 100%. Otherwise it is a blank slot (`.w.hid`); wrong/missed words after an attempt are pink blanks with what was heard shown underneath. 💡 cycles: 0 blanks → 1 first letter on blanks only → 2 show answer. Hint resets to 0 when the line changes.
 
 ## Scoring (core.js)
-- `tokenize()` normalizes both sides: lowercase, strip punctuation, expand contractions (I've→i have), numbers <100 → words, `%` → percent, hyphens removed (off-peak→offpeak), `'s` → `s` token. Each token keeps the index of its display word.
+- `tokenize()` normalizes both sides: money (`$8.50` → 8 dollars and 50 cents), lowercase, strip punctuation, expand contractions (I've→i have), numbers <100 → words, `%` → percent, hyphens removed (off-peak→offpeak), `'s` → `s` token. Each token keeps the index of its display word.
 - `mergeCompounds()` joins two heard tokens when the joined form is in the answer ("off peak" → "offpeak").
 - `align()` = word-level Levenshtein with backtrace. `prefix=true` for the live view (trailing answer words are "pending", not missed).
 - `score = matched answer tokens / (answer tokens + extra spoken tokens)`, rounded %. Extra words are penalised on purpose.
@@ -55,7 +55,7 @@ A word of the current line is shown only if: said correctly (live or in the last
 | `speakup.pos.v3` | `{dialogId: lastLineIndex}` (Resume button) |
 | `speakup.count.v3` | `{dialogId: n}` — +1 on every scored attempt (retries count too); shown as 연습한 문장 on the info page |
 | `speakup.auto.v3`, `speakup.pause.v3` | settings |
-First run seeds the sample dialogue (`SAMPLE_MD`). If storage throws, a warning banner tells the user to export.
+First run seeds the sample dialogue (`SAMPLE_MD`) — the same in every browser, it is not the owner's data. Keep the sample generic: no work/company content (owner asked to replace the old team-meeting sample). On load, an unedited old sample (matched by `OLD_SAMPLE`) is swapped for the current one. If storage throws, a warning banner tells the user to export.
 Data is per browser **and per origin** (artifact vs localhost vs kappy.app are separate). Lost on clearing site data, private mode, Safari's 7-day eviction of non-home-screen sites. Export is the backup. If cross-device sync is ever wanted, it needs a server (e.g. Cloudflare KV/D1) — not built.
 
 ## Script format (.md) — import, export and the editor all use it
@@ -80,9 +80,10 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.3.0 — 2026/11/19**
+- **Current version: v3.4.0 — 2026/11/19**
 
 ## Changelog
+- v3.4.0 (2026/11/19): sample replaced — "카페에서 커피 주문하기" (Barista/Customer, 17 lines) instead of the team-meeting script; browsers still holding the unedited old sample get it swapped on load. Prompt example switched to café lines. Tokenizer reads `$8.50`/`$8` as dollars/cents.
 - v3.3.0 (2026/11/19): compact player dock — removed 🐢 천천히, chips on one non-wrapping row with shorter labels, smaller mic (60px) / nav buttons / result pill, dropped the hint and engine text lines (mic tooltip + `data-engine` instead).
 - v3.2.0 (2026/11/19): edit mode gains "N개 내보내기" — export only the selected dialogues (same MD/JSON sheet; a single dialogue gets its title in the filename).
 - v3.1.0 (2026/11/19): info page — removed the 완벽하게 말한 문장 box and the 고유 단어 / 평균 길이 tiles; Start/Resume buttons moved up into that spot (bottom bar removed); new 연습한 문장 tile counting every scored attempt per dialogue (`speakup.count.v3`).

@@ -4,12 +4,13 @@ import assert from "node:assert/strict";
 import { parseMd, toMd, libraryToMd, parseJsonImport, libraryToJson, scoreAttempt, dialogStats } from "../public/js/core.js";
 import { SAMPLE_MD } from "../public/js/content.js";
 
-test("sample parses into one dialogue with 19 pairs", () => {
+test("sample parses into one dialogue, every line translated", () => {
   const [d, ...rest] = parseMd(SAMPLE_MD);
   assert.equal(rest.length, 0);
-  assert.equal(d.title, "검색인프라팀 주간회의");
-  assert.equal(d.lines.length, 19);
-  assert.deepEqual(d.lines[2], { spk: "Jin", en: "The indexing pipeline migration is about eighty percent done.", ko: "인덱싱 파이프라인 마이그레이션은 약 80퍼센트 완료되었습니다." });
+  assert.equal(d.title, "카페에서 커피 주문하기");
+  assert.equal(d.lines.length, 17);
+  assert.ok(d.lines.every(l => l.spk && l.en && l.ko));
+  assert.deepEqual(d.lines[3], { spk: "Customer", en: "A medium, please.", ko: "중간 것 하나, 부탁합니다." });
 });
 
 test("speaker and '- ' are optional; Korean speaker prefix is dropped; --- and # split dialogues", () => {
@@ -32,6 +33,8 @@ test("scoring tolerates contractions, numbers, percent and compounds", () => {
     ["The indexing pipeline migration is about eighty percent done.", "the indexing pipeline migration is about 80% done"],
     ["Can we schedule full reindexes during off-peak hours from now on?", "can we schedule full re-indexes during off peak hours from now on"],
     ["I've been working here for about three years.", "I have been working here for about 3 years"],
+    ["That comes to eight dollars and fifty cents.", "that comes to $8.50"],
+    ["That comes to eight dollars and fifty cents.", "that comes to $8 and 50 cents"],
   ]) assert.equal(scoreAttempt(ans, said).score, 100, said);
 });
 
@@ -45,6 +48,6 @@ test("scoring reports wrong, missing and extra words", () => {
 
 test("stats", () => {
   const s = dialogStats(parseMd(SAMPLE_MD)[0]);
-  assert.equal(s.sentences, 19);
-  assert.deepEqual(s.speakers, ["Sammy", "Jin", "Mina", "Kevin"]);
+  assert.equal(s.sentences, 17);
+  assert.deepEqual(s.speakers, ["Barista", "Customer"]);
 });

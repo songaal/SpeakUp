@@ -1,6 +1,6 @@
 // Speak Up — UI. Views: library → info → player. All data lives in localStorage (see store below).
 import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, align, foldToWords, heardTokens, scoreAttempt, dialogStats } from "./core.js";
-import { SAMPLE_MD, CONVERT_PROMPT } from "./content.js";
+import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT } from "./content.js";
 
 /* ================= store (localStorage) ================= */
 const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3", count: "speakup.count.v3", auto: "speakup.auto.v3", pause: "speakup.pause.v3" };
@@ -15,6 +15,10 @@ const newDialog = (d, t = Date.now()) => ({ id: uid(), title: d.title, lines: d.
 
 let lib = ls.get(K.lib, null);                 // [{id,title,lines:[{spk,en,ko}],created,updated}] — array order = list order
 if (!Array.isArray(lib)) { lib = parseMd(SAMPLE_MD).map(d => newDialog(d)); ls.set(K.lib, lib); }
+else {   // swap the pre-v3.4.0 sample (team meeting) for the new one if it is still unedited
+  const i = lib.findIndex(d => d.title === OLD_SAMPLE.title && d.lines.length === OLD_SAMPLE.lines && d.lines[0] && d.lines[0].en === OLD_SAMPLE.firstEn);
+  if (i >= 0) { lib[i] = newDialog(parseMd(SAMPLE_MD)[0]); ls.set(K.lib, lib); }
+}
 let best = ls.get(K.best, {});                 // "dialogId|english sentence" → best score (survives line reordering/edits)
 let posMap = ls.get(K.pos, {});                // dialogId → last sentence index
 let countMap = ls.get(K.count, {});            // dialogId → total sentences practised (every scored attempt)
