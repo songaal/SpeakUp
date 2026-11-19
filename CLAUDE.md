@@ -5,6 +5,7 @@ English-speaking practice web app. The learner sees a **literal (직역) Korean 
 - Live: https://speakup.kappy.app (also `speakup.<account>.workers.dev`)
 - Owner: Sammy (Korean speaker). **Reply to the owner in Korean.**
 - UI language: Korean + English via `public/js/i18n.js` (`t(key, …args)`; static markup uses `data-i18n`, `data-i18n-html`, `data-i18n-title`, `data-i18n-ph`, `data-i18n-aria`). Choice in ⚙︎ 설정: system (default — `navigator.language` ko* → ko, else en) / 한국어 / English, stored in `speakup.lang.v3`. **Every new UI string must be added to both `STR.ko` and `STR.en`.** Script content (titles, sample) is not translated.
+- No zoom (viewport `maximum-scale=1, user-scalable=no`, `touch-action:manipulation`, iOS `gesture*` events blocked, inputs ≥16px so iOS doesn't auto-zoom on focus) while text stays drag-selectable (no `user-select:none` on content).
 - Theme: Duolingo-like (Nunito, green `#58CC02`, chunky bottom-border buttons). Keep it.
 
 ## Run / test / deploy
@@ -37,7 +38,7 @@ wrangler.jsonc           Cloudflare Worker (static assets only, custom domain sp
 - Player: vertical script. Current line centred (big, Korean + masked English word slots + "heard" box); previous lines above and next lines below show **Korean only** (never the English — it is the answer, even for solved lines), faded, with the session score badge on past lines. Free swipe/wheel scroll with CSS `scroll-snap`; when scrolling settles (`onScrollSettle`, 130 ms debounce) the line nearest the centre becomes current. Programmatic scrolls set `progScrollUntil` so they don't re-trigger selection.
 
 ## Masking / hint rules (player)
-Before/while speaking, a word of the current line is a blank slot (`.w.hid`) until it is said correctly (live → green). After an attempt is scored **every answer word is shown**: correct = green; wrong / missed = the answer word in normal ink, exactly as the 👀 정답 hint shows it, on a light-red slot with a red underline (no strikethrough, no red text), plus the heard word underneath for substitutions. Owner wants the right answer readable in place of the mistake. Tapping the mic again clears the attempt and re-blanks the line. 💡 cycles: 0 blanks → 1 first letter on blanks only → 2 show answer. Hint resets to 0 when the line changes **and when a sentence is scored** (matters in keep mode, where you retry on the same line).
+Before/while speaking, a word of the current line is a blank slot (`.w.hid`) until it is said correctly (live → green). After an attempt is scored **every answer word is shown**: correct = green; wrong / missed = the answer word in normal ink, exactly as the 👀 정답 hint shows it, on a light-red slot with a red underline (no strikethrough, no red text), plus the heard word underneath for substitutions. Owner wants the right answer readable in place of the mistake. Tapping the mic again (or speaking again in keep mode) starts a new attempt, but **words already filled stay green** — `lineFilled[idx]` keeps them for the session and each new capture starts from them (owner: never un-fill a recognised word). 💡 cycles: 0 blanks → 1 first letter on blanks only → 2 show answer. Hint resets to 0 when the line changes **and when a sentence is scored** (matters in keep mode, where you retry on the same line).
 
 ## Scoring (core.js)
 - `tokenize()` normalizes both sides: money (`$8.50` → 8 dollars and 50 cents), lowercase, strip punctuation, expand contractions (I've→i have), numbers <100 → words, `%` → percent, hyphens removed (off-peak→offpeak), `'s` → `s` token. Each token keeps the index of its display word.
@@ -90,9 +91,10 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.11.0 — 2026/11/19** (also `VERSION` in app.js, shown in Settings)
+- **Current version: v3.12.0 — 2026/11/19** (also `VERSION` in app.js, shown in Settings)
 
 ## Changelog
+- v3.12.0 (2026/11/19): filled words stay filled across retries of a line (session); zoom disabled (pinch, double-tap, focus) with text selection still allowed.
 - v3.11.0 (2026/11/19): finish screen after the last sentence (average score, stats, confetti, fanfare, perseverance quote, 완료 → list). Settings with app language (system default / 한국어 / English) — all UI strings moved to i18n.js; English version of the AI prompt.
 - v3.10.0 (2026/11/19): scoring = blanks filled (accumulated over every try in the attempt; extra/wrong words no longer lower the score). Non-current lines never show English.
 - v3.9.0 (2026/11/19): success chime on a 100% sentence (Web Audio two-note tone).

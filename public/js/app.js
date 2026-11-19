@@ -2,7 +2,7 @@
 import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, fillWords, scoreAttempt, dialogStats } from "./core.js";
 import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT, CONVERT_PROMPT_EN } from "./content.js";
 import { t, lang, setLang, langChoice, setLangChoice, resolveLang, applyStatic, QUOTES } from "./i18n.js";
-const VERSION = "3.11.0";
+const VERSION = "3.12.0";
 const promptText = () => lang() === "en" ? CONVERT_PROMPT_EN : CONVERT_PROMPT;
 
 /* ================= store (localStorage) ================= */
@@ -237,7 +237,7 @@ const badge = s => s == null ? "" : `<span class="badge ${s >= 80 ? "g" : s >= 5
 let sessionStart = 0;
 function openPlayer(at) {
   sessionStart = Date.now();
-  lines = dlg.lines; attempts = {}; refCache = {}; liveSt = null; hintLv = 0;
+  lines = dlg.lines; attempts = {}; lineFilled = {}; refCache = {}; liveSt = null; hintLv = 0;
   idx = Math.max(0, Math.min(lines.length - 1, at));
   posMap[dlg.id] = idx; ls.set(K.pos, posMap);
   $("ptitle").textContent = dlg.title;
@@ -290,6 +290,7 @@ function select(i, { scroll = true } = {}) {
   gated = false;
   if (listening) { resetCapture(); clearTimeout(silenceTimer); }   // keep mode: same session, fresh capture for the new line
   const old = idx; idx = i; hintLv = 0; liveSt = null; updateHintBtn();
+  if (listening) filledSet = keptFilled();                       // keep mode: start the new line from its kept words
   resEl.className = "result"; errEl.className = "err";
   posMap[dlg.id] = idx; ls.set(K.pos, posMap);
   new Set([old - 1, old, old + 1, i - 1, i, i + 1]).forEach(j => { if (j >= 0 && j < lines.length) rerenderLine(j); });
@@ -324,11 +325,14 @@ try { speechSynthesis.getVoices(); } catch (e) {}
 let finalText = "", interimText = "", listening = false, finished = true, abandon = false, autoTimer = null;
 let finalParts = [];        // settled phrases of the current capture (each is aligned on its own to fill blanks)
 let filledSet = new Set();  // answer word indices filled so far in the current capture — once filled, stays filled
+let lineFilled = {};        // idx → Set of words filled in any attempt this session; a retry starts from these (never un-fills)
+const keptFilled = () => new Set(lineFilled[idx] || []);
+function paintKept() { liveSt = filledSet.size ? refOf(idx).words.map((_, k) => filledSet.has(k) ? "live" : "") : null; paintCurWords(); }
 function showLive() {
   const heard = $("heard"); if (!heard) return;
   const full = (finalText + " " + interimText).trim();
   if (!full) { if (!attempts[idx]) heard.innerHTML = `<span class="label">${t("listening")}</span><span class="ph">${t("listeningPh")}</span>`; return; }
-  if (attempts[idx]) { delete attempts[idx]; resEl.className = "result"; rerenderLine(idx); }   // keep mode: speaking again = new attempt
+  if (attempts[idx]) { delete attempts[idx]; resEl.className = "result"; rerenderLine(idx); }   // speaking again = new attempt (kept words stay green)
   const ref = refOf(idx);
   fillWords(ref, [full, ...finalParts, interimText]).forEach(k => filledSet.add(k));
   liveSt = ref.words.map((_, k) => filledSet.has(k) ? "live" : ""); paintCurWords();
@@ -341,6 +345,7 @@ function evaluate() {
   const r = scoreAttempt(lines[idx].en, said, [...finalParts, interimText], [...filledSet]);
   const heardHTML = `<span class="label">${t("youSaid")}</span>` + r.heard.map(h => `<span class="h ${h.st}">${esc(h.w)}</span>`).join(" ");
   attempts[idx] = { st: r.st, said: r.said, score: r.score, heardHTML };
+  lineFilled[idx] = new Set(r.st.map((s, k) => s === "ok" ? k : -1).filter(k => k >= 0));
   hintLv = 0; updateHintBtn();                                   // hint resets once the sentence is scored
   if (r.score === 100) chime();
   countMap[dlg.id] = (countMap[dlg.id] || 0) + 1; ls.set(K.count, countMap);
@@ -404,7 +409,7 @@ let skipNextFinal = false;         // dictation: drop the rest of a phrase that 
 let gated = false;                 // keep mode: ignore speech while waiting for auto-advance
 function resetCapture() {
   consumed = lastLen; skipNextFinal = !!interimText.trim();
-  finalText = ""; interimText = ""; baseText = ""; liveSt = null; finalParts = []; filledSet = new Set(); basePartsN = 0; updateDone();
+  finalText = ""; interimText = ""; baseText = ""; liveSt = null; finalParts = []; filledSet = keptFilled(); basePartsN = 0; updateDone();
 }
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function armSilence() { clearTimeout(silenceTimer); updateDone(); if ((finalText + interimText).trim()) silenceTimer = setTimeout(sentenceDone, PAUSE_MS); }
@@ -447,9 +452,9 @@ function nativeStart() {
 function startListening() {
   clearTimeout(autoTimer); errEl.className = "err"; resEl.className = "result";
   if (attempts[idx]) { delete attempts[idx]; rerenderLine(idx); }
-  finalText = ""; interimText = ""; baseText = ""; liveSt = null; finalParts = []; filledSet = new Set(); basePartsN = 0; finished = false; listening = true; abandon = false; stopRequested = false; gated = false; skipNextFinal = false;
+  finalText = ""; interimText = ""; baseText = ""; liveSt = null; finalParts = []; filledSet = keptFilled(); basePartsN = 0; finished = false; listening = true; abandon = false; stopRequested = false; gated = false; skipNextFinal = false;
   try { speechSynthesis.cancel(); } catch (e) {}
-  setMicUI(true); showLive();
+  setMicUI(true); paintKept(); showLive();
   if (engine === "dictation") {
     dictation.start().catch(err => {    // must be called synchronously from the click
       const r = String(err && (err.code || err.message) || err);
@@ -577,5 +582,9 @@ $("settingsBtn").onclick = () => { paintLangSeg(); $("setOverlay").classList.add
 $("setClose").onclick = () => $("setOverlay").classList.remove("show");
 $("setOverlay").addEventListener("click", e => { if (e.target.id === "setOverlay") $("setOverlay").classList.remove("show"); });
 $("langSeg").addEventListener("click", e => { const b = e.target.closest("[data-lang]"); if (!b) return; setLangChoice(b.dataset.lang); paintLangSeg(); applyLang(); });
+
+// No zoom: iOS Safari ignores user-scalable=no for pinch, so block its gesture events (text selection is unaffected).
+["gesturestart", "gesturechange", "gestureend"].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
+document.addEventListener("touchmove", e => { if (e.scale && e.scale !== 1) e.preventDefault(); }, { passive: false });
 
 applyLang(); updateAuto(); updateKeep();

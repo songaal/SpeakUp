@@ -6,6 +6,8 @@
     --ink:#3C3C3C; --muted:#777; --faint:#AFAFAF; --line:#E5E5E5; --soft:#F2F2F2;
   }
   *{box-sizing:border-box}
+  /* no zoom (pinch / double-tap / input focus) but text stays selectable */
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation}
   html,body{margin:0;height:100%;background:#fff;color:var(--ink);font-family:Nunito,system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;-webkit-tap-highlight-color:transparent}
   body{overflow:hidden}
   button{font:inherit}
@@ -29,7 +31,7 @@
   .libin{max-width:680px;margin:0 auto}
   .warn{display:none;background:var(--orange-l);color:var(--orange-d);font-weight:800;font-size:13px;border-radius:12px;padding:10px 12px;margin-bottom:10px}
   .warn.show{display:block}
-  .dcard{display:flex;align-items:center;gap:12px;border:2px solid var(--line);border-bottom-width:4px;border-radius:16px;padding:14px 14px;margin-bottom:10px;cursor:pointer;user-select:none}
+  .dcard{display:flex;align-items:center;gap:12px;border:2px solid var(--line);border-bottom-width:4px;border-radius:16px;padding:14px 14px;margin-bottom:10px;cursor:pointer}
   .dcard:active{transform:translateY(2px);border-bottom-width:2px}
   .dcard.sel{background:var(--blue-l);border-color:#84D8FF}
   .chk{display:none;flex:none;width:26px;height:26px;border-radius:8px;border:2px solid var(--line);background:#fff;place-items:center;color:#fff;font-weight:900;font-size:16px}
@@ -142,7 +144,7 @@
   .sheet h2{margin:0 0 6px;font-size:20px;font-weight:900}
   .sheet p{margin:0 0 10px;color:var(--muted);font-weight:700;font-size:13px;line-height:1.5}
   .sheet pre{margin:0 0 10px;background:var(--soft);border-radius:10px;padding:8px 10px;font-size:12px;font-weight:700;color:var(--ink);white-space:pre-wrap;line-height:1.5}
-  .sheet textarea{flex:1 1 auto;width:100%;min-height:clamp(140px,40dvh,520px);border:2px solid var(--line);border-radius:14px;padding:12px;font:inherit;font-size:14px;font-weight:700;color:var(--ink);resize:none;line-height:1.55}
+  .sheet textarea{flex:1 1 auto;width:100%;min-height:clamp(140px,40dvh,520px);border:2px solid var(--line);border-radius:14px;padding:12px;font:inherit;font-size:16px;font-weight:700;color:var(--ink);resize:none;line-height:1.55}
   .sheet textarea:focus{outline:none;border-color:var(--blue)}
   .sheet .btns{display:flex;gap:10px;margin-top:12px}
   .sheet .btns .btn{flex:1}
