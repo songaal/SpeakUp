@@ -242,12 +242,13 @@ function openPlayer(at) {
 }
 $("backBtn").onclick = () => { if (listening) stopListening(true); clearTimeout(autoTimer); try { speechSynthesis.cancel(); } catch (e) {} showView("info"); renderInfo(); };
 
-// A word is visible if: not the current line, said correctly (live or scored), hint level 2, or the line was 100%.
+// A word is visible if: not the current line, already scored (right ones green, wrong ones red with what was heard
+// underneath, missed ones struck through — the answer is always shown after an attempt), said right live, or hint level 2.
 function wordView(i, k) {
   const att = attempts[i], cur = i === idx;
   let st = att ? att.st[k] : "";
   if (cur && !att && liveSt && liveSt[k] === "live") st = "live";
-  const shown = !cur || st === "ok" || st === "live" || hintLv === 2 || (att && att.score === 100);
+  const shown = !cur || !!att || st === "live" || hintLv === 2;
   return { cls: "w " + st + (shown ? "" : " hid" + (hintLv === 1 ? " fl1" : "")), said: cur && att && att.said[k] ? att.said[k] : "" };
 }
 function wordsHTML(i) {
