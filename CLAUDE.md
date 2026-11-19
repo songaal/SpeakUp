@@ -30,7 +30,7 @@ wrangler.jsonc           Cloudflare Worker (static assets only, custom domain sp
 - Library: edit mode (✎ 편집) shows checkboxes (multi-delete with in-page confirm modal, or **export only the selected** ones) and ▲▼ reorder buttons. `＋ 새 대화` opens the editor sheet; 가져오기 (file input, .md/.json, many files, **appends**); 내보내기 (sheet with MD/JSON tabs, Copy, Save file).
 - 📋 프롬프트: popover with `CONVERT_PROMPT`; opening it copies to clipboard; closes on outside pointerdown, window blur, Esc, or toggling.
 - Info: ✎ 수정 opens the editor with that dialogue as md; saving with extra `---` sections inserts them as new dialogues after it. The editor also has 삭제.
-- Player: vertical script. Current line centred (big, Korean + masked English word slots + "heard" box); previous lines above show English (revealed) + their score this session; next lines below show Korean only, faded. Free swipe/wheel scroll with CSS `scroll-snap`; when scrolling settles (`onScrollSettle`, 130 ms debounce) the line nearest the centre becomes current. Programmatic scrolls set `progScrollUntil` so they don't re-trigger selection.
+- Player: vertical script. Current line centred (big, Korean + masked English word slots + "heard" box); previous lines above show English only if attempted (this session, or a best score exists) — an unattempted past line shows Korean only, because the English is the answer; next lines below show Korean only, faded. Free swipe/wheel scroll with CSS `scroll-snap`; when scrolling settles (`onScrollSettle`, 130 ms debounce) the line nearest the centre becomes current. Programmatic scrolls set `progScrollUntil` so they don't re-trigger selection.
 
 ## Masking / hint rules (player)
 Before/while speaking, a word of the current line is a blank slot (`.w.hid`) until it is said correctly (live → green). After an attempt is scored **every answer word is shown**: correct = green; wrong / missed = the answer word in normal ink, exactly as the 👀 정답 hint shows it, on a light-red slot with a red underline (no strikethrough, no red text), plus the heard word underneath for substitutions. Owner wants the right answer readable in place of the mistake. Tapping the mic again clears the attempt and re-blanks the line. 💡 cycles: 0 blanks → 1 first letter on blanks only → 2 show answer. Hint resets to 0 when the line changes.
@@ -45,6 +45,7 @@ Before/while speaking, a word of the current line is a blank slot (`.w.hid`) unt
 ## Speech engines (app.js)
 - **Browser** (kappy.app, localhost): Web Speech API, `lang=en-US`, `continuous`, `interimResults`, `maxAlternatives=3` (final results pick the alternative overlapping the answer most). Chrome ends a session by itself after silence → `onend` restarts it, keeps text in `baseText`, and shows a toast nudge "🔄 인식이 잠깐 끊겨서…". Fatal errors (not-allowed, network) set `stopRequested` so it doesn't loop.
 - **Claude artifact** (the owner also previews it as a claude.ai artifact): the sandbox blocks the mic, so it uses `window.claude.use("dictation")` (declared capability) and `use("downloads")` for Save file. Detected via `window.claude.use`. Don't remove this branch.
+- **유지 (keep) button** next to the mic (`keepOn`, `speakup.keep.v3`): one recognition session stays open across sentences (also means fewer iOS start/stop chimes). When a sentence completes (`sentenceDone`: all matched or pause ran out) it scores, then `resetCapture()` starts a fresh capture in the same session — native skips results before index `consumed`; dictation drops the rest of an in-progress phrase (`skipNextFinal`). While waiting for auto-advance, `gated` ignores speech. Speaking again on a scored line starts a new attempt. `select()` keeps the session in keep mode. Tap the mic to turn it off; end of script at 100% stops it.
 - Pause handling: ⏸ chip cycles 2s / 4s (default) / 7s / manual. After that much silence (with some speech) it stops and scores; manual = only a tap stops it.
 - Firefox has no Web Speech recognition → mic disabled with a message.
 
@@ -71,7 +72,7 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Owner preferences / decisions so far
 - Korean shown, English hidden is the core mode (not reading practice). Korean must be a literal translation to help recall the English word order.
-- Neighbouring sentences faded for continuity; past sentences scroll up, next ones below.
+- Neighbouring sentences faded for continuity; past sentences scroll up, next ones below. Never reveal the English of a past line that was not attempted.
 - Hint only fills blanks, never re-hides correct words.
 - After scoring, show the correct word in place of each mistake — readable like the 정답 hint, marked wrong only by the red slot — with the heard word underneath.
 - Notify (toast) when Chrome drops recognition rather than silently ending.
@@ -79,13 +80,14 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 - Info page: no "perfect sentences" progress box and no unique-word / average-length stats (owner removed them); Start sits where the progress box was.
 - No login/auth: data never leaves the browser, so others visiting the site can't see it. Owner agreed (2026/11/19) to stay login-free; only revisit if server sync is added.
-- Player dock must stay compact: one row ‹ mic ›, one non-wrapping row of short chips (💡 힌트 · 🔊 듣기 · ⏭ 자동 · ⏸ N초). No slow-TTS button (removed), no engine/hint text lines.
+- Player dock must stay compact: one row ‹ mic 유지 ›, one non-wrapping row of short chips (💡 힌트 · 🔊 듣기 · ⏭ 자동 · ⏸ N초). No slow-TTS button (removed), no engine/hint text lines.
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.6.1 — 2026/11/19**
+- **Current version: v3.7.0 — 2026/11/19**
 
 ## Changelog
+- v3.7.0 (2026/11/19): 유지 button keeps the mic on across sentences (score → fresh capture in the same session). Past lines no longer reveal English unless attempted.
 - v3.6.1 (2026/11/19): wrong/missed words show the answer in normal ink (like the 정답 hint) on a red-underlined slot — no strikethrough, no red text.
 - v3.6.0 (2026/11/19): after scoring, wrong and missed words now reveal the correct answer word (red / strikethrough) instead of staying blank; the heard word stays underneath.
 - v3.5.0 (2026/11/19): library cards show practised-sentence count and last practice date (new `speakup.last.v3`) instead of "완벽 x/N" and its progress bar. Fix: editor/export sheets scroll on short screens (Save button was pushed off-screen when the viewport or keyboard left little height).

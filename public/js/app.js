@@ -3,7 +3,7 @@ import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, a
 import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT } from "./content.js";
 
 /* ================= store (localStorage) ================= */
-const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3", count: "speakup.count.v3", last: "speakup.last.v3", auto: "speakup.auto.v3", pause: "speakup.pause.v3" };
+const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3", count: "speakup.count.v3", last: "speakup.last.v3", auto: "speakup.auto.v3", keep: "speakup.keep.v3", pause: "speakup.pause.v3" };
 let storageOK = true;
 try { localStorage.setItem("speakup.probe", "1"); localStorage.removeItem("speakup.probe"); } catch (e) { storageOK = false; }
 const ls = {
@@ -24,6 +24,7 @@ let posMap = ls.get(K.pos, {});                // dialogId → last sentence ind
 let countMap = ls.get(K.count, {});            // dialogId → total sentences practised (every scored attempt)
 let lastMap = ls.get(K.last, {});              // dialogId → timestamp (ms) of the last scored attempt
 let autoNext = ls.get(K.auto, true);
+let keepOn = ls.get(K.keep, false);           // 유지: mic stays on across sentences (one recognition session → fewer iOS chimes)
 const PAUSES = [2000, 4000, 7000, 0];          // 0 = manual stop only
 let pauseMs = ls.get(K.pause, 4000);
 const saveLib = () => ls.set(K.lib, lib);
@@ -265,7 +266,7 @@ function lineHTML(i) {
   let en = "";
   if (cur) en = `<div class="en" id="curEn">${wordsHTML(i)}</div>
       <div class="heard" id="heard">${att ? att.heardHTML : `<span class="ph">한글 직역을 보고 영어로 말해 보세요.</span>`}</div>`;
-  else if (i < idx) en = `<div class="en">${wordsHTML(i)}</div>`;      // past lines reveal the English; future lines show Korean only
+  else if (i < idx && (att || bestOf(dlg, L) != null)) en = `<div class="en">${wordsHTML(i)}</div>`;   // past lines reveal English only once attempted (now or before); unattempted past + future lines show Korean only
   const bdg = cur ? badge(bestOf(dlg, L)) : (i < idx && att ? badge(att.score) : "");
   return `<div class="ln ${cur ? "cur" : ""}${Math.abs(i - idx) === 1 ? " near" : ""}" data-i="${i}">${spkChip(L.spk)}${bdg}<div class="ko">${esc(L.ko || "(번역 없음)")}</div>${en}</div>`;
 }
@@ -281,8 +282,10 @@ function centerCurrent(smooth) {
 }
 function select(i, { scroll = true } = {}) {
   i = Math.max(0, Math.min(lines.length - 1, i));
-  if (listening) stopListening(true);
+  if (listening && !keepOn) stopListening(true);
   clearTimeout(autoTimer);
+  gated = false;
+  if (listening) { resetCapture(); clearTimeout(silenceTimer); }   // keep mode: same session, fresh capture for the new line
   const old = idx; idx = i; hintLv = 0; liveSt = null; updateHintBtn();
   resEl.className = "result"; errEl.className = "err";
   posMap[dlg.id] = idx; ls.set(K.pos, posMap);
@@ -319,11 +322,12 @@ let finalText = "", interimText = "", listening = false, finished = true, abando
 function showLive() {
   const heard = $("heard"); if (!heard) return;
   const full = (finalText + " " + interimText).trim();
-  if (!full) { heard.innerHTML = `<span class="label">LISTENING…</span><span class="ph">듣고 있어요…</span>`; return; }
+  if (!full) { if (!attempts[idx]) heard.innerHTML = `<span class="label">LISTENING…</span><span class="ph">듣고 있어요…</span>`; return; }
+  if (attempts[idx]) { delete attempts[idx]; resEl.className = "result"; rerenderLine(idx); }   // keep mode: speaking again = new attempt
   const ref = refOf(idx), a = align(ref.toks.map(t => t.t), heardTokens(ref, full).toks.map(t => t.t), true);
   liveSt = foldToWords(ref, a.refSt, null, true).st; paintCurWords();
   heard.innerHTML = `<span class="label">LISTENING…</span>${esc(finalText)} <span class="interim">${esc(interimText)}</span>`;
-  if (a.refSt.every(s => s === "ok")) stopListening();          // everything said → finish right away
+  if (a.refSt.every(s => s === "ok")) sentenceDone();           // everything said → score right away
 }
 function evaluate() {
   const said = (finalText + " " + interimText).trim(); liveSt = null;
@@ -340,14 +344,26 @@ function evaluate() {
   $("score").textContent = r.score + "%"; $("msgT").textContent = title; $("msgS").textContent = parts.join(" · ");
   resEl.className = "result show " + cls;
   clearTimeout(autoTimer);
-  if (autoNext && r.score === 100 && idx < lines.length - 1) { const at = idx; autoTimer = setTimeout(() => { if (view === "play" && idx === at && !listening) select(idx + 1); }, 1400); }
+  if (autoNext && r.score === 100 && idx < lines.length - 1) {
+    const at = idx; if (keepOn && listening) gated = true;      // ignore speech until the next line is up
+    autoTimer = setTimeout(() => { if (view === "play" && idx === at && (keepOn || !listening)) select(idx + 1); else gated = false; }, 1400);
+  } else if (keepOn && listening && r.score === 100 && idx === lines.length - 1) stopListening(true);   // end of script
 }
-function setMicUI(on) { micEl.classList.toggle("rec", on); micEl.title = on ? (pauseMs ? "말하는 중… 탭하면 끝" : "말하는 중… 다 말하면 탭") : "탭해서 말하기"; micEl.setAttribute("aria-label", micEl.title); }
+function setMicUI(on) { micEl.classList.toggle("rec", on); micEl.title = on ? (keepOn ? "계속 듣는 중… 탭하면 마이크 끔" : pauseMs ? "말하는 중… 탭하면 끝" : "말하는 중… 다 말하면 탭") : "탭해서 말하기"; micEl.setAttribute("aria-label", micEl.title); }
 function showErr(m) { errEl.textContent = m; errEl.className = "err show"; }
 function finish() {
   if (finished) return; finished = true; listening = false; clearTimeout(silenceTimer); setMicUI(false);
   if (abandon) { abandon = false; liveSt = null; return; }
+  if (!(finalText + interimText).trim() && (keepOn || attempts[idx])) { liveSt = null; paintCurWords(); return; }   // keep mode: mic turned off between sentences
   evaluate();
+}
+// A sentence is complete (all words matched, or the pause ran out). Normal mode: stop the mic and score.
+// Keep mode: score, then keep the same session open and start a fresh capture.
+function sentenceDone() {
+  if (!keepOn) { stopListening(); return; }
+  clearTimeout(silenceTimer);
+  if (!(finalText + interimText).trim()) return;
+  evaluate(); resetCapture();
 }
 function nudge(m) { toast(m); micEl.classList.remove("blip"); void micEl.offsetWidth; micEl.classList.add("blip"); try { navigator.vibrate && navigator.vibrate(40); } catch (e) {} }
 
@@ -356,14 +372,23 @@ function nudge(m) { toast(m); micEl.classList.remove("blip"); void micEl.offsetW
  * Everywhere else (kappy.app, localhost) it uses the browser Web Speech API with lang en-US.
  * Chrome ends a session by itself after a long silence: onend restarts it and keeps what was heard (baseText). */
 let engine = null, dictation = null, rec = null, silenceTimer = null, stopRequested = false, baseText = "";
+let consumed = 0, lastLen = 0;     // native: results before index `consumed` belong to earlier sentences (keep mode)
+let skipNextFinal = false;         // dictation: drop the rest of a phrase that was in progress when the capture reset
+let gated = false;                 // keep mode: ignore speech while waiting for auto-advance
+function resetCapture() {
+  consumed = lastLen; skipNextFinal = !!interimText.trim();
+  finalText = ""; interimText = ""; baseText = ""; liveSt = null;
+}
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-function armSilence() { clearTimeout(silenceTimer); if (pauseMs && (finalText + interimText).trim()) silenceTimer = setTimeout(() => stopListening(), pauseMs); }
+function armSilence() { clearTimeout(silenceTimer); if (pauseMs && (finalText + interimText).trim()) silenceTimer = setTimeout(sentenceDone, pauseMs); }
 function nativeStart() {
   rec = new SR(); rec.lang = "en-US"; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 3;
-  const refSet = new Set(refOf(idx).toks.map(t => t.t));
+  consumed = 0; lastLen = 0;
   rec.onresult = e => {
+    lastLen = e.results.length; if (gated) return;
+    const refSet = new Set(refOf(idx).toks.map(t => t.t));
     let fin = "", inter = "";
-    for (let i = 0; i < e.results.length; i++) {
+    for (let i = consumed; i < e.results.length; i++) {
       const r = e.results[i];
       if (r.isFinal) {     // pick the alternative that overlaps the answer most
         let ba = r[0].transcript, bh = -1;
@@ -392,7 +417,7 @@ function nativeStart() {
 function startListening() {
   clearTimeout(autoTimer); errEl.className = "err"; resEl.className = "result";
   if (attempts[idx]) { delete attempts[idx]; rerenderLine(idx); }
-  finalText = ""; interimText = ""; baseText = ""; liveSt = null; finished = false; listening = true; abandon = false; stopRequested = false;
+  finalText = ""; interimText = ""; baseText = ""; liveSt = null; finished = false; listening = true; abandon = false; stopRequested = false; gated = false; skipNextFinal = false;
   try { speechSynthesis.cancel(); } catch (e) {}
   setMicUI(true); showLive();
   if (engine === "dictation") {
@@ -421,8 +446,8 @@ function setEngine(n) {
     micEl.disabled = false;
     if (d) {
       dictation = d;
-      d.onPartial(({ text }) => { if (!listening) return; interimText = text || ""; showLive(); armSilence(); });
-      d.onFinal(({ text }) => { if (!listening) return; finalText = (finalText + " " + (text || "")).trim(); interimText = ""; showLive(); armSilence(); });
+      d.onPartial(({ text }) => { if (!listening || gated || skipNextFinal) return; interimText = text || ""; showLive(); armSilence(); });
+      d.onFinal(({ text }) => { if (!listening) return; if (skipNextFinal || gated) { skipNextFinal = false; return; } finalText = (finalText + " " + (text || "")).trim(); interimText = ""; showLive(); armSilence(); });
       d.onState(({ state }) => { if (state === "idle" && !finished) finish(); });
       setEngine("dictation"); return;
     }
@@ -436,6 +461,8 @@ $("prev").onclick = () => select(idx - 1);
 $("next").onclick = () => select(idx + 1);
 $("play").onclick = () => speak(0.95);
 $("hintBtn").onclick = () => { hintLv = (hintLv + 1) % 3; updateHintBtn(); paintCurWords(); };
+function updateKeep() { $("keepBtn").classList.toggle("on", keepOn); $("keepBtn").setAttribute("aria-pressed", keepOn); }
+$("keepBtn").onclick = () => { keepOn = !keepOn; ls.set(K.keep, keepOn); updateKeep(); setMicUI(listening); toast(keepOn ? "마이크를 계속 켜 둬요. 끄려면 마이크를 누르세요" : "문장마다 마이크를 켜고 꺼요"); };
 function updateAuto() { $("autoBtn").classList.toggle("on", autoNext); }
 $("autoBtn").onclick = () => { autoNext = !autoNext; ls.set(K.auto, autoNext); updateAuto(); };
 function updatePause() { $("pauseBtn").textContent = pauseMs ? `⏸ ${pauseMs / 1000}초` : "⏸ 수동"; $("pauseBtn").title = pauseMs ? `${pauseMs / 1000}초 쉬면 채점` : "탭해야 채점"; $("pauseBtn").classList.toggle("on", !pauseMs); }
@@ -452,4 +479,4 @@ document.addEventListener("keydown", e => {
 });
 window.addEventListener("resize", () => { if (view === "play") centerCurrent(false); });
 
-updateHintBtn(); updateAuto(); updatePause(); renderLib();
+updateHintBtn(); updateAuto(); updatePause(); updateKeep(); renderLib();
