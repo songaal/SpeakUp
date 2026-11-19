@@ -26,7 +26,7 @@ wrangler.jsonc           Cloudflare Worker (static assets only, custom domain sp
 
 ## Views (app.js)
 `library` → tap card → `info` (stats tiles: sentences / words / 연습한 문장 = total scored attempts for this dialogue; Start / Resume buttons right under the stats; full text list with best % per line) → `player`.
-- Library: edit mode (✎ 편집) shows checkboxes (multi-delete with in-page confirm modal) and ▲▼ reorder buttons. `＋ 새 대화` opens the editor sheet; 가져오기 (file input, .md/.json, many files, **appends**); 내보내기 (sheet with MD/JSON tabs, Copy, Save file).
+- Library: edit mode (✎ 편집) shows checkboxes (multi-delete with in-page confirm modal, or **export only the selected** ones) and ▲▼ reorder buttons. `＋ 새 대화` opens the editor sheet; 가져오기 (file input, .md/.json, many files, **appends**); 내보내기 (sheet with MD/JSON tabs, Copy, Save file).
 - 📋 프롬프트: popover with `CONVERT_PROMPT`; opening it copies to clipboard; closes on outside pointerdown, window blur, Esc, or toggling.
 - Info: ✎ 수정 opens the editor with that dialogue as md; saving with extra `---` sections inserts them as new dialogues after it. The editor also has 삭제.
 - Player: vertical script. Current line centred (big, Korean + masked English word slots + "heard" box); previous lines above show English (revealed) + their score this session; next lines below show Korean only, faded. Free swipe/wheel scroll with CSS `scroll-snap`; when scrolling settles (`onScrollSettle`, 130 ms debounce) the line nearest the centre becomes current. Programmatic scrolls set `progScrollUntil` so they don't re-trigger selection.
@@ -78,11 +78,14 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.1.0 — 2026/11/19**
+- **Current version: v3.2.0 — 2026/11/19**
 
 ## Changelog
+- v3.2.0 (2026/11/19): edit mode gains "N개 내보내기" — export only the selected dialogues (same MD/JSON sheet; a single dialogue gets its title in the filename).
 - v3.1.0 (2026/11/19): info page — removed the 완벽하게 말한 문장 box and the 고유 단어 / 평균 길이 tiles; Start/Resume buttons moved up into that spot (bottom bar removed); new 연습한 문장 tile counting every scored attempt per dialogue (`speakup.count.v3`).
 - v3.0.0 (2026/11/19): first repo release — library (reorder, multi-delete, add/edit, md/json import-export, 📋 AI prompt), info page, swipe-to-select player, hints on blanks only, Chrome auto-resume nudge, pause setting.
+
+- No login/auth: data never leaves the browser, so others visiting the site can't see it. Owner agreed (2026/11/19) to stay login-free; only revisit if server sync is added.
 
 ## Ideas not built yet
 - Pronunciation scoring (Azure Pronunciation Assessment needs a key + server proxy).

@@ -72,7 +72,8 @@ function renderLib() {
         <span class="chev">›</span></div>`;
     }).join("");
   }
-  $("delSelBtn").disabled = !selected.size;
+  $("delSelBtn").disabled = $("exSelBtn").disabled = !selected.size;
+  $("exSelBtn").textContent = selected.size ? `${selected.size}개 내보내기` : "내보내기";
   $("delSelBtn").textContent = selected.size ? `${selected.size}개 삭제` : "삭제";
   $("selAllBtn").textContent = selected.size === lib.length && lib.length ? "선택 해제" : "전체 선택";
 }
@@ -159,16 +160,18 @@ $("fileIn").onchange = async e => {
   else toast("가져올 대화를 찾지 못했어요");
 };
 
-/* ---- export (all dialogues in one .md joined by ---, or .json) ---- */
-let exFmt = "md", downloads = null;   // downloads: Claude-artifact capability, null elsewhere
+/* ---- export (all dialogues, or the ones selected in edit mode; one .md joined by ---, or .json) ---- */
+let exFmt = "md", downloads = null, exList = [];   // downloads: Claude-artifact capability, null elsewhere
 const inArtifact = !!(window.claude && typeof window.claude.use === "function");
 function fillExport() {
   $("exMd").classList.toggle("on", exFmt === "md"); $("exJson").classList.toggle("on", exFmt === "json");
-  $("exText").value = exFmt === "md" ? libraryToMd(lib) : libraryToJson(lib);
-  $("exInfo").textContent = `대화 ${lib.length}개 · ${lib.reduce((a, d) => a + d.lines.length, 0)}문장`;
+  $("exText").value = exFmt === "md" ? libraryToMd(exList) : libraryToJson(exList);
+  $("exInfo").textContent = `${exList.length === lib.length ? "전체 " : "선택한 "}대화 ${exList.length}개 · ${exList.reduce((a, d) => a + d.lines.length, 0)}문장`;
   $("exDown").style.display = (!inArtifact || downloads) ? "" : "none";
 }
-$("exportBtn").onclick = () => { if (!lib.length) { toast("내보낼 대화가 없어요"); return; } fillExport(); $("exOverlay").classList.add("show"); };
+function openExport(list) { exList = list; fillExport(); $("exOverlay").classList.add("show"); }
+$("exportBtn").onclick = () => { if (!lib.length) { toast("내보낼 대화가 없어요"); return; } openExport(lib); };
+$("exSelBtn").onclick = () => { if (selected.size) openExport(lib.filter(d => selected.has(d.id))); };   // keeps list order
 $("exMd").onclick = () => { exFmt = "md"; fillExport(); };
 $("exJson").onclick = () => { exFmt = "json"; fillExport(); };
 $("exClose").onclick = () => $("exOverlay").classList.remove("show");
@@ -178,7 +181,7 @@ $("exCopy").onclick = async () => {
 };
 $("exDown").onclick = async () => {
   const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-  const filename = `speak-up-${stamp}.${exFmt}`, data = $("exText").value;
+  const filename = (exList.length === 1 ? `speak-up-${exList[0].title.replace(/[\\/:*?"<>|]+/g, "").trim().slice(0, 40)}-${stamp}` : `speak-up-${stamp}`) + `.${exFmt}`, data = $("exText").value;
   if (downloads) { try { await downloads.save({ filename, data }); toast("저장했어요"); } catch (e) { toast("저장이 취소됐어요"); } return; }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([data], { type: exFmt === "md" ? "text/markdown" : "application/json" })); a.download = filename;
