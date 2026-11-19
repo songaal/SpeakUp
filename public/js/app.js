@@ -3,7 +3,7 @@ import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, a
 import { SAMPLE_MD, CONVERT_PROMPT } from "./content.js";
 
 /* ================= store (localStorage) ================= */
-const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3", auto: "speakup.auto.v3", pause: "speakup.pause.v3" };
+const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3", count: "speakup.count.v3", auto: "speakup.auto.v3", pause: "speakup.pause.v3" };
 let storageOK = true;
 try { localStorage.setItem("speakup.probe", "1"); localStorage.removeItem("speakup.probe"); } catch (e) { storageOK = false; }
 const ls = {
@@ -17,6 +17,7 @@ let lib = ls.get(K.lib, null);                 // [{id,title,lines:[{spk,en,ko}]
 if (!Array.isArray(lib)) { lib = parseMd(SAMPLE_MD).map(d => newDialog(d)); ls.set(K.lib, lib); }
 let best = ls.get(K.best, {});                 // "dialogId|english sentence" → best score (survives line reordering/edits)
 let posMap = ls.get(K.pos, {});                // dialogId → last sentence index
+let countMap = ls.get(K.count, {});            // dialogId → total sentences practised (every scored attempt)
 let autoNext = ls.get(K.auto, true);
 const PAUSES = [2000, 4000, 7000, 0];          // 0 = manual stop only
 let pauseMs = ls.get(K.pause, 4000);
@@ -92,8 +93,8 @@ $("delSelBtn").onclick = async () => {
   if (!selected.size) return;
   if (!await ask(`대화 ${selected.size}개를 삭제할까요? 되돌릴 수 없어요.`)) return;
   const n = selected.size;
-  lib = lib.filter(d => !selected.has(d.id)); selected.forEach(id => delete posMap[id]); selected.clear();
-  saveLib(); ls.set(K.pos, posMap); editing = false; renderLib(); toast(`${n}개 삭제했어요`);
+  lib = lib.filter(d => !selected.has(d.id)); selected.forEach(id => { delete posMap[id]; delete countMap[id]; }); selected.clear();
+  saveLib(); ls.set(K.pos, posMap); ls.set(K.count, countMap); editing = false; renderLib(); toast(`${n}개 삭제했어요`);
 };
 function addDialogs(ds) { const t = Date.now(); ds.forEach((d, i) => lib.push(newDialog(d, t + i))); saveLib(); renderLib(); }
 
@@ -138,7 +139,7 @@ $("edSave").onclick = () => {
 };
 $("edDelete").onclick = async () => {
   if (!await ask(`"${dlg.title}" 대화를 삭제할까요?`)) return;
-  lib = lib.filter(d => d !== dlg); delete posMap[dlg.id]; saveLib(); ls.set(K.pos, posMap);
+  lib = lib.filter(d => d !== dlg); delete posMap[dlg.id]; delete countMap[dlg.id]; saveLib(); ls.set(K.pos, posMap); ls.set(K.count, countMap);
   closeEditor(); goLibrary(); toast("삭제했어요");
 };
 
@@ -187,22 +188,20 @@ $("exDown").onclick = async () => {
 /* ================= INFO ================= */
 function openInfo(id) { dlg = lib.find(d => d.id === id); if (!dlg) return; spkColor = {}; showView("info"); renderInfo(); $("infoView").querySelector(".infoscroll").scrollTop = 0; }
 function renderInfo() {
-  const s = dialogStats(dlg), done = doneCount(dlg), n = s.sentences, at = Math.min(posMap[dlg.id] || 0, n - 1);
+  const s = dialogStats(dlg), n = s.sentences, at = Math.min(posMap[dlg.id] || 0, n - 1);
   $("infoBody").innerHTML = `
     <div class="ititle">${esc(dlg.title)}</div>
     <div class="stats">
       <div class="stat"><b>${n}</b><span>문장</span></div>
       <div class="stat"><b>${s.words}</b><span>단어</span></div>
-      <div class="stat"><b>${s.unique}</b><span>고유 단어</span></div>
-      <div class="stat"><b>${s.avg}</b><span>평균 길이</span></div>
+      <div class="stat"><b>${countMap[dlg.id] || 0}</b><span>연습한 문장</span></div>
     </div>
-    <div class="iprog">완벽하게 말한 문장 ${done}/${n}<div class="pb"><i style="width:${n ? done / n * 100 : 0}%"></i></div></div>
+    <div class="startrow">${at > 0
+      ? `<button class="btn sec" id="startTop">처음부터</button><button class="btn pri" id="startResume">▶ ${at + 1}번째부터 이어서</button>`
+      : `<button class="btn pri" id="startTop">▶ 시작</button>`}</div>
     ${s.speakers.length ? `<div class="spks">${s.speakers.map(spkChip).join("")}</div>` : ""}
     <ul class="tl">${dlg.lines.map((l, i) => { const b = bestOf(dlg, l);
       return `<li><span class="no">${i + 1}</span><div class="tx"><div class="te">${spkChip(l.spk)}${esc(l.en)}</div><div class="tk">${esc(l.ko || "")}</div></div><span class="bs ${b === 100 ? "p" : ""}">${b != null ? b + "%" : ""}</span></li>`; }).join("")}</ul>`;
-  $("infoBtns").innerHTML = at > 0
-    ? `<button class="btn sec" id="startTop">처음부터</button><button class="btn pri" id="startResume">▶ ${at + 1}번째부터 이어서</button>`
-    : `<button class="btn pri" id="startTop">▶ 시작</button>`;
   $("startTop").onclick = () => openPlayer(0);
   if ($("startResume")) $("startResume").onclick = () => openPlayer(at);
 }
@@ -319,6 +318,7 @@ function evaluate() {
   const r = scoreAttempt(lines[idx].en, said);
   const heardHTML = `<span class="label">YOU SAID</span>` + r.heard.map(h => `<span class="h ${h.st}">${esc(h.w)}</span>`).join(" ");
   attempts[idx] = { st: r.st, said: r.said, score: r.score, heardHTML };
+  countMap[dlg.id] = (countMap[dlg.id] || 0) + 1; ls.set(K.count, countMap);
   const key = dlg.id + "|" + lines[idx].en; if (best[key] == null || r.score > best[key]) { best[key] = r.score; ls.set(K.best, best); }
   rerenderLine(idx);
   const [cls, title] = r.score === 100 ? ["good", "Perfect! 🎉"] : r.score >= 80 ? ["good", "Great!"] : r.score >= 50 ? ["mid", "Good try!"] : ["low", "One more time!"];

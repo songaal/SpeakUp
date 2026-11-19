@@ -25,7 +25,7 @@ wrangler.jsonc           Cloudflare Worker (static assets only, custom domain sp
 ```
 
 ## Views (app.js)
-`library` → tap card → `info` (stats: sentences/words/unique words/avg length, best-progress bar, full text list, Start / Resume) → `player`.
+`library` → tap card → `info` (stats tiles: sentences / words / 연습한 문장 = total scored attempts for this dialogue; Start / Resume buttons right under the stats; full text list with best % per line) → `player`.
 - Library: edit mode (✎ 편집) shows checkboxes (multi-delete with in-page confirm modal) and ▲▼ reorder buttons. `＋ 새 대화` opens the editor sheet; 가져오기 (file input, .md/.json, many files, **appends**); 내보내기 (sheet with MD/JSON tabs, Copy, Save file).
 - 📋 프롬프트: popover with `CONVERT_PROMPT`; opening it copies to clipboard; closes on outside pointerdown, window blur, Esc, or toggling.
 - Info: ✎ 수정 opens the editor with that dialogue as md; saving with extra `---` sections inserts them as new dialogues after it. The editor also has 삭제.
@@ -53,6 +53,7 @@ A word of the current line is shown only if: said correctly (live or in the last
 | `speakup.lib.v3` | `[{id, title, lines:[{spk, en, ko}], created, updated}]` — array order = list order |
 | `speakup.best.v3` | `{"<dialogId>|<english sentence>": bestScore}` — keyed by sentence text so reordering lines keeps scores |
 | `speakup.pos.v3` | `{dialogId: lastLineIndex}` (Resume button) |
+| `speakup.count.v3` | `{dialogId: n}` — +1 on every scored attempt (retries count too); shown as 연습한 문장 on the info page |
 | `speakup.auto.v3`, `speakup.pause.v3` | settings |
 First run seeds the sample dialogue (`SAMPLE_MD`). If storage throws, a warning banner tells the user to export.
 Data is per browser **and per origin** (artifact vs localhost vs kappy.app are separate). Lost on clearing site data, private mode, Safari's 7-day eviction of non-home-screen sites. Export is the backup. If cross-device sync is ever wanted, it needs a server (e.g. Cloudflare KV/D1) — not built.
@@ -72,6 +73,16 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 - Hint only fills blanks, never re-hides correct words.
 - Notify (toast) when Chrome drops recognition rather than silently ending.
 - Lists: reorder, multi-select delete, edit inside the dialogue, big textarea for adding.
+
+- Info page: no "perfect sentences" progress box and no unique-word / average-length stats (owner removed them); Start sits where the progress box was.
+
+## Versioning
+Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
+- **Current version: v3.1.0 — 2026/11/19**
+
+## Changelog
+- v3.1.0 (2026/11/19): info page — removed the 완벽하게 말한 문장 box and the 고유 단어 / 평균 길이 tiles; Start/Resume buttons moved up into that spot (bottom bar removed); new 연습한 문장 tile counting every scored attempt per dialogue (`speakup.count.v3`).
+- v3.0.0 (2026/11/19): first repo release — library (reorder, multi-delete, add/edit, md/json import-export, 📋 AI prompt), info page, swipe-to-select player, hints on blanks only, Chrome auto-resume nudge, pause setting.
 
 ## Ideas not built yet
 - Pronunciation scoring (Azure Pronunciation Assessment needs a key + server proxy).
