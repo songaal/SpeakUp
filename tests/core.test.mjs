@@ -38,12 +38,19 @@ test("scoring tolerates contractions, numbers, percent and compounds", () => {
   ]) assert.equal(scoreAttempt(ans, said).score, 100, said);
 });
 
-test("scoring reports wrong, missing and extra words", () => {
+test("score = blanks filled; wrong/extra words don't cost", () => {
   const r = scoreAttempt("I've been working here for about three years.", "I have been work here for about 3 years now");
   assert.deepEqual(r.st, ["ok", "ok", "bad", "ok", "ok", "ok", "ok", "ok"]);
   assert.equal(r.said[2], "work");
-  assert.equal(r.extra, 1);
-  assert.equal(r.score, 80);
+  assert.equal(r.score, 88);   // 7 of 8 blanks
+});
+
+test("several tries in one attempt still fill every blank → 100", () => {
+  const ans = "Hi there! What can I get for you today?";
+  assert.equal(scoreAttempt(ans, "hi there what cat uh what can I get for you", ["hi there what cat uh", "what can I get for you", "today"]).score, 100);
+  assert.equal(scoreAttempt(ans, "for you today", ["for you today"], [0, 1, 2, 3, 4, 5]).score, 100);   // earlier blanks filled live
+  const r = scoreAttempt(ans, "for you today");
+  assert.deepEqual(r.st, ["miss", "miss", "miss", "miss", "miss", "miss", "ok", "ok", "ok"]);
 });
 
 test("stats", () => {

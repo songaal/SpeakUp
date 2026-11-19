@@ -1,5 +1,5 @@
 // Speak Up — UI. Views: library → info → player. All data lives in localStorage (see store below).
-import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, align, foldToWords, heardTokens, scoreAttempt, dialogStats } from "./core.js";
+import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, fillWords, scoreAttempt, dialogStats } from "./core.js";
 import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT } from "./content.js";
 
 /* ================= store (localStorage) ================= */
@@ -265,7 +265,7 @@ function lineHTML(i) {
   let en = "";
   if (cur) en = `<div class="en" id="curEn">${wordsHTML(i)}</div>
       <div class="heard" id="heard">${att ? att.heardHTML : `<span class="ph">한글 직역을 보고 영어로 말해 보세요.</span>`}</div>`;
-  else if (i < idx && (att || bestOf(dlg, L) != null)) en = `<div class="en">${wordsHTML(i)}</div>`;   // past lines reveal English only once attempted (now or before); unattempted past + future lines show Korean only
+  // past and future lines never show the English (it is the answer) — Korean only
   const bdg = cur ? badge(bestOf(dlg, L)) : (i < idx && att ? badge(att.score) : "");
   return `<div class="ln ${cur ? "cur" : ""}${Math.abs(i - idx) === 1 ? " near" : ""}" data-i="${i}">${spkChip(L.spk)}${bdg}<div class="ko">${esc(L.ko || "(번역 없음)")}</div>${en}</div>`;
 }
@@ -318,20 +318,23 @@ try { speechSynthesis.getVoices(); } catch (e) {}
 
 /* ---- listening & scoring ---- */
 let finalText = "", interimText = "", listening = false, finished = true, abandon = false, autoTimer = null;
+let finalParts = [];        // settled phrases of the current capture (each is aligned on its own to fill blanks)
+let filledSet = new Set();  // answer word indices filled so far in the current capture — once filled, stays filled
 function showLive() {
   const heard = $("heard"); if (!heard) return;
   const full = (finalText + " " + interimText).trim();
   if (!full) { if (!attempts[idx]) heard.innerHTML = `<span class="label">LISTENING…</span><span class="ph">듣고 있어요…</span>`; return; }
   if (attempts[idx]) { delete attempts[idx]; resEl.className = "result"; rerenderLine(idx); }   // keep mode: speaking again = new attempt
-  const ref = refOf(idx), a = align(ref.toks.map(t => t.t), heardTokens(ref, full).toks.map(t => t.t), true);
-  liveSt = foldToWords(ref, a.refSt, null, true).st; paintCurWords();
+  const ref = refOf(idx);
+  fillWords(ref, [full, ...finalParts, interimText]).forEach(k => filledSet.add(k));
+  liveSt = ref.words.map((_, k) => filledSet.has(k) ? "live" : ""); paintCurWords();
   heard.innerHTML = `<span class="label">LISTENING…</span>${esc(finalText)} <span class="interim">${esc(interimText)}</span>`;
-  if (a.refSt.every(s => s === "ok")) sentenceDone();           // everything said → score right away
+  if (filledSet.size === ref.words.length) sentenceDone();      // every blank filled → score right away
 }
 function evaluate() {
   const said = (finalText + " " + interimText).trim(); liveSt = null;
   if (!said) { paintCurWords(); const h = $("heard"); if (h) h.innerHTML = `<span class="ph">아무 말도 인식되지 않았어요. 다시 해 볼까요?</span>`; return; }
-  const r = scoreAttempt(lines[idx].en, said);
+  const r = scoreAttempt(lines[idx].en, said, [...finalParts, interimText], [...filledSet]);
   const heardHTML = `<span class="label">YOU SAID</span>` + r.heard.map(h => `<span class="h ${h.st}">${esc(h.w)}</span>`).join(" ");
   attempts[idx] = { st: r.st, said: r.said, score: r.score, heardHTML };
   hintLv = 0; updateHintBtn();                                   // hint resets once the sentence is scored
@@ -341,7 +344,7 @@ function evaluate() {
   const key = dlg.id + "|" + lines[idx].en; if (best[key] == null || r.score > best[key]) { best[key] = r.score; ls.set(K.best, best); }
   rerenderLine(idx);
   const [cls, title] = r.score === 100 ? ["good", "Perfect! 🎉"] : r.score >= 80 ? ["good", "Great!"] : r.score >= 50 ? ["mid", "Good try!"] : ["low", "One more time!"];
-  const parts = [`${r.ok}/${r.total} 일치`]; if (r.bad) parts.push(`틀림 ${r.bad}`); if (r.miss) parts.push(`빠짐 ${r.miss}`); if (r.extra) parts.push(`추가 ${r.extra}`);
+  const parts = [`빈칸 ${r.ok}/${r.total}`]; if (r.bad) parts.push(`틀림 ${r.bad}`); if (r.miss) parts.push(`빠짐 ${r.miss}`);
   $("score").textContent = r.score + "%"; $("msgT").textContent = title; $("msgS").textContent = parts.join(" · ");
   resEl.className = "result show " + cls;
   clearTimeout(autoTimer);
@@ -389,12 +392,12 @@ function nudge(m) { toast(m); micEl.classList.remove("blip"); void micEl.offsetW
  * Everywhere else (kappy.app, localhost) it uses the browser Web Speech API with lang en-US.
  * Chrome ends a session by itself after a long silence: onend restarts it and keeps what was heard (baseText). */
 let engine = null, dictation = null, rec = null, silenceTimer = null, stopRequested = false, baseText = "";
-let consumed = 0, lastLen = 0;     // native: results before index `consumed` belong to earlier sentences (keep mode)
+let consumed = 0, lastLen = 0, basePartsN = 0;   // basePartsN: phrases carried over from a previous (auto-restarted) session     // native: results before index `consumed` belong to earlier sentences (keep mode)
 let skipNextFinal = false;         // dictation: drop the rest of a phrase that was in progress when the capture reset
 let gated = false;                 // keep mode: ignore speech while waiting for auto-advance
 function resetCapture() {
   consumed = lastLen; skipNextFinal = !!interimText.trim();
-  finalText = ""; interimText = ""; baseText = ""; liveSt = null; updateDone();
+  finalText = ""; interimText = ""; baseText = ""; liveSt = null; finalParts = []; filledSet = new Set(); basePartsN = 0; updateDone();
 }
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function armSilence() { clearTimeout(silenceTimer); updateDone(); if ((finalText + interimText).trim()) silenceTimer = setTimeout(sentenceDone, PAUSE_MS); }
@@ -406,16 +409,16 @@ function nativeStart() {
   rec.onresult = e => {
     lastLen = e.results.length; if (gated) return;
     const refSet = new Set(refOf(idx).toks.map(t => t.t));
-    let fin = "", inter = "";
+    let fin = "", inter = ""; const parts = [];
     for (let i = consumed; i < e.results.length; i++) {
       const r = e.results[i];
       if (r.isFinal) {     // pick the alternative that overlaps the answer most
         let ba = r[0].transcript, bh = -1;
         for (let k = 0; k < r.length; k++) { const hit = tokenize(r[k].transcript).toks.filter(t => refSet.has(t.t)).length; if (hit > bh) { bh = hit; ba = r[k].transcript; } }
-        fin += ba + " ";
+        fin += ba + " "; parts.push(ba);
       } else inter += r[0].transcript;
     }
-    finalText = (baseText + " " + fin).trim(); interimText = inter.trim(); showLive(); armSilence();
+    finalText = (baseText + " " + fin).trim(); interimText = inter.trim(); finalParts = basePartsN ? [...finalParts.slice(0, basePartsN), ...parts] : parts; showLive(); armSilence();
   };
   rec.onerror = e => {
     if (e.error === "no-speech" || e.error === "aborted") return;
@@ -426,7 +429,8 @@ function nativeStart() {
   };
   rec.onend = () => {
     if (listening && !stopRequested && !finished) {
-      baseText = (finalText + " " + interimText).trim(); finalText = baseText; interimText = "";
+      if (interimText) finalParts.push(interimText);
+      baseText = (finalText + " " + interimText).trim(); finalText = baseText; interimText = ""; basePartsN = finalParts.length;
       try { nativeStart(); nudge("🔄 인식이 잠깐 끊겨서 다시 듣는 중이에요"); return; } catch (e) {}
     }
     finish();
@@ -436,7 +440,7 @@ function nativeStart() {
 function startListening() {
   clearTimeout(autoTimer); errEl.className = "err"; resEl.className = "result";
   if (attempts[idx]) { delete attempts[idx]; rerenderLine(idx); }
-  finalText = ""; interimText = ""; baseText = ""; liveSt = null; finished = false; listening = true; abandon = false; stopRequested = false; gated = false; skipNextFinal = false;
+  finalText = ""; interimText = ""; baseText = ""; liveSt = null; finalParts = []; filledSet = new Set(); basePartsN = 0; finished = false; listening = true; abandon = false; stopRequested = false; gated = false; skipNextFinal = false;
   try { speechSynthesis.cancel(); } catch (e) {}
   setMicUI(true); showLive();
   if (engine === "dictation") {
@@ -466,7 +470,7 @@ function setEngine(n) {
     if (d) {
       dictation = d;
       d.onPartial(({ text }) => { if (!listening || gated || skipNextFinal) return; interimText = text || ""; showLive(); armSilence(); });
-      d.onFinal(({ text }) => { if (!listening) return; if (skipNextFinal || gated) { skipNextFinal = false; return; } finalText = (finalText + " " + (text || "")).trim(); interimText = ""; showLive(); armSilence(); });
+      d.onFinal(({ text }) => { if (!listening) return; if (skipNextFinal || gated) { skipNextFinal = false; return; } finalText = (finalText + " " + (text || "")).trim(); if (text) finalParts.push(text); interimText = ""; showLive(); armSilence(); });
       d.onState(({ state }) => { if (state === "idle" && !finished) finish(); });
       setEngine("dictation"); return;
     }

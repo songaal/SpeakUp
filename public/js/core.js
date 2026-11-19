@@ -112,13 +112,17 @@ export function mergeCompounds(h, refSet) {
 }
 
 /* ------------------------------------------------------------------ *
- * Word-level Levenshtein alignment.
- * prefix=true (live view): the speaker may not be done, so unmatched trailing answer words are "pending".
+ * Word-level Levenshtein alignment. mode:
+ *   false/"global" — whole answer vs whole heard text (unmatched answer words = "miss")
+ *   true/"prefix"  — the speaker may not be done: trailing answer words are free ("pending")
+ *   "local"        — a fragment: answer words before AND after it are free, so "for you today" lands at the end
+ * refSt: ok | bad (substituted) | miss | pending   hypSt: ok | bad | extra   refSaid: heard word for "bad"
  * refSt: ok | bad (substituted) | miss | pending   hypSt: ok | bad | extra   refSaid: heard word for "bad"
  * ------------------------------------------------------------------ */
-export function align(ref, hyp, prefix = false) {
+export function align(ref, hyp, mode = false) {
+  const local = mode === "local", prefix = mode === true || mode === "prefix" || local;
   const n = ref.length, m = hyp.length, D = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
-  for (let i = 0; i <= n; i++) D[i][0] = i; for (let j = 0; j <= m; j++) D[0][j] = j;
+  for (let i = 0; i <= n; i++) D[i][0] = local ? 0 : i; for (let j = 0; j <= m; j++) D[0][j] = j;
   for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) {
     const c = ref[i - 1] === hyp[j - 1] ? 0 : 1;
     D[i][j] = Math.min(D[i - 1][j - 1] + c, D[i - 1][j] + 1, D[i][j - 1] + 1);
@@ -127,6 +131,7 @@ export function align(ref, hyp, prefix = false) {
   const refSt = new Array(n).fill(prefix ? "pending" : "miss"), hypSt = new Array(m).fill("extra"), refSaid = new Array(n).fill(null);
   let i = ei, j = m;
   while (i > 0 || j > 0) {
+    if (local && j === 0) break;                                       // free answer prefix stays "pending"
     if (i > 0 && j > 0 && ref[i - 1] === hyp[j - 1] && D[i][j] === D[i - 1][j - 1]) { refSt[i - 1] = "ok"; hypSt[j - 1] = "ok"; i--; j--; }
     else if (i > 0 && j > 0 && D[i][j] === D[i - 1][j - 1] + 1) { refSt[i - 1] = "bad"; hypSt[j - 1] = "bad"; refSaid[i - 1] = hyp[j - 1]; i--; j--; }
     else if (i > 0 && D[i][j] === D[i - 1][j] + 1) { refSt[i - 1] = "miss"; i--; }
@@ -153,17 +158,35 @@ export function heardTokens(answer, saidText) {
   const h = tokenize(saidText); h.toks = mergeCompounds(h.toks, set); return h;
 }
 
-// Full scoring of one attempt. score = matched answer tokens / (answer tokens + extra spoken tokens).
-export function scoreAttempt(answerText, saidText) {
+// Blanks filled: answer display-word indices said correctly in ANY of the texts (whole transcript, single phrases,
+// the live guess). Each text is aligned locally, so a fragment or a second try fills the right blanks.
+export function fillWords(ref, texts) {
+  const R = ref.toks.map(t => t.t), filled = new Set();
+  ref.words.forEach((_, k) => { if (!ref.toks.some(t => t.w === k)) filled.add(k); });   // nothing to say (e.g. "—")
+  for (const text of texts) {
+    if (!text || !text.trim()) continue;
+    const a = align(R, heardTokens(ref, text).toks.map(t => t.t), "local");
+    foldToWords(ref, a.refSt, null, true).st.forEach((s, k) => { if (s === "live") filled.add(k); });
+  }
+  return filled;
+}
+
+// Scoring of one attempt = how many blanks got filled. "You said" is only a reference: extra or wrong words
+// don't cost anything, and a word counts once it was said right at any point (prefilled = filled live).
+// score = filled answer words / answer words.
+export function scoreAttempt(answerText, saidText, extraTexts = [], prefilled = []) {
   const ref = tokenize(answerText), h = heardTokens(ref, saidText);
+  const filled = fillWords(ref, [saidText, ...extraTexts]); prefilled.forEach(k => filled.add(k));
   const R = ref.toks.map(t => t.t), a = align(R, h.toks.map(t => t.t), false);
-  const { st, said } = foldToWords(ref, a.refSt, a.refSaid, false);
+  const g = foldToWords(ref, a.refSt, a.refSaid, false);
+  const st = ref.words.map((_, k) => filled.has(k) ? "ok" : (g.st[k] === "bad" || g.st[k] === "part") ? g.st[k] : "miss");
+  const said = ref.words.map((_, k) => st[k] === "ok" ? "" : g.said[k] || "");
   const heardWordSt = h.words.map(() => []); h.toks.forEach((tk, k) => heardWordSt[tk.w].push(a.hypSt[k]));
-  const ok = a.refSt.filter(s => s === "ok").length, extra = a.hypSt.filter(s => s === "extra").length;
-  const bad = a.refSt.filter(s => s === "bad").length, miss = a.refSt.filter(s => s === "miss").length;
+  const ok = st.filter(s => s === "ok").length, bad = st.filter(s => s === "bad" || s === "part").length, miss = st.filter(s => s === "miss").length;
+  const extra = a.hypSt.filter(s => s === "extra").length;
   return {
-    st, said, ok, extra, bad, miss, total: R.length,
-    score: R.length ? Math.round(ok / (R.length + extra) * 100) : 0,
+    st, said, ok, extra, bad, miss, total: st.length,
+    score: st.length ? Math.round(ok / st.length * 100) : 0,
     heard: h.words.map((w, k) => {
       const s = heardWordSt[k];
       return { w, st: !s.length || s.every(x => x === "ok") ? "ok" : s.every(x => x === "extra") ? "extra" : "bad" };

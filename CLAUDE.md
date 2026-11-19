@@ -30,7 +30,7 @@ wrangler.jsonc           Cloudflare Worker (static assets only, custom domain sp
 - Library: edit mode (✎ 편집) shows checkboxes (multi-delete with in-page confirm modal, or **export only the selected** ones) and ▲▼ reorder buttons. `＋ 새 대화` opens the editor sheet; 가져오기 (file input, .md/.json, many files, **appends**); 내보내기 (sheet with MD/JSON tabs, Copy, Save file).
 - 📋 프롬프트: popover with `CONVERT_PROMPT`; opening it copies to clipboard; closes on outside pointerdown, window blur, Esc, or toggling.
 - Info: ✎ 수정 opens the editor with that dialogue as md; saving with extra `---` sections inserts them as new dialogues after it. The editor also has 삭제.
-- Player: vertical script. Current line centred (big, Korean + masked English word slots + "heard" box); previous lines above show English only if attempted (this session, or a best score exists) — an unattempted past line shows Korean only, because the English is the answer; next lines below show Korean only, faded. Free swipe/wheel scroll with CSS `scroll-snap`; when scrolling settles (`onScrollSettle`, 130 ms debounce) the line nearest the centre becomes current. Programmatic scrolls set `progScrollUntil` so they don't re-trigger selection.
+- Player: vertical script. Current line centred (big, Korean + masked English word slots + "heard" box); previous lines above and next lines below show **Korean only** (never the English — it is the answer, even for solved lines), faded, with the session score badge on past lines. Free swipe/wheel scroll with CSS `scroll-snap`; when scrolling settles (`onScrollSettle`, 130 ms debounce) the line nearest the centre becomes current. Programmatic scrolls set `progScrollUntil` so they don't re-trigger selection.
 
 ## Masking / hint rules (player)
 Before/while speaking, a word of the current line is a blank slot (`.w.hid`) until it is said correctly (live → green). After an attempt is scored **every answer word is shown**: correct = green; wrong / missed = the answer word in normal ink, exactly as the 👀 정답 hint shows it, on a light-red slot with a red underline (no strikethrough, no red text), plus the heard word underneath for substitutions. Owner wants the right answer readable in place of the mistake. Tapping the mic again clears the attempt and re-blanks the line. 💡 cycles: 0 blanks → 1 first letter on blanks only → 2 show answer. Hint resets to 0 when the line changes **and when a sentence is scored** (matters in keep mode, where you retry on the same line).
@@ -38,9 +38,10 @@ Before/while speaking, a word of the current line is a blank slot (`.w.hid`) unt
 ## Scoring (core.js)
 - `tokenize()` normalizes both sides: money (`$8.50` → 8 dollars and 50 cents), lowercase, strip punctuation, expand contractions (I've→i have), numbers <100 → words, `%` → percent, hyphens removed (off-peak→offpeak), `'s` → `s` token. Each token keeps the index of its display word.
 - `mergeCompounds()` joins two heard tokens when the joined form is in the answer ("off peak" → "offpeak").
-- `align()` = word-level Levenshtein with backtrace. `prefix=true` for the live view (trailing answer words are "pending", not missed).
-- `score = matched answer tokens / (answer tokens + extra spoken tokens)`, rounded %. Extra words are penalised on purpose.
-- Live: as soon as every answer token is matched, listening stops and it scores (no need to wait for silence).
+- `align()` = word-level Levenshtein with backtrace; modes global / prefix / **local** (free answer words on both sides, so a fragment or a second try lands in the right place).
+- **Score = blanks filled / answer words** (owner rule: "You said" is only a reference). `fillWords()` aligns locally each of: the whole transcript, every settled phrase (`finalParts`), and the live guess; a word is filled once it was said right in any of them. In the player `filledSet` accumulates across the whole capture — once green, stays green — so several messy tries that eventually fill every blank score 100%. Extra or wrong words cost nothing.
+- After scoring, unfilled words show the answer on a red slot; for substitutions the heard word (from the global alignment) goes underneath.
+- Live: as soon as every blank is filled it scores (no need to wait for silence).
 
 ## Speech engines (app.js)
 - **Browser** (kappy.app, localhost): Web Speech API, `lang=en-US`, `continuous`, `interimResults`, `maxAlternatives=3` (final results pick the alternative overlapping the answer most). Chrome ends a session by itself after silence → `onend` restarts it, keeps text in `baseText`, and shows a toast nudge "🔄 인식이 잠깐 끊겨서…". Fatal errors (not-allowed, network) set `stopRequested` so it doesn't loop.
@@ -73,7 +74,7 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Owner preferences / decisions so far
 - Korean shown, English hidden is the core mode (not reading practice). Korean must be a literal translation to help recall the English word order.
-- Neighbouring sentences faded for continuity; past sentences scroll up, next ones below. Never reveal the English of a past line that was not attempted.
+- Neighbouring sentences faded for continuity; past sentences scroll up, next ones below. Never show the English of a non-current line, solved or not.
 - Hint only fills blanks, never re-hides correct words.
 - After scoring, show the correct word in place of each mistake — readable like the 정답 hint, marked wrong only by the red slot — with the heard word underneath.
 - Notify (toast) when Chrome drops recognition rather than silently ending.
@@ -85,9 +86,10 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.9.0 — 2026/11/19**
+- **Current version: v3.10.0 — 2026/11/19**
 
 ## Changelog
+- v3.10.0 (2026/11/19): scoring = blanks filled (accumulated over every try in the attempt; extra/wrong words no longer lower the score). Non-current lines never show English.
 - v3.9.0 (2026/11/19): success chime on a 100% sentence (Web Audio two-note tone).
 - v3.8.0 (2026/11/19): dock roomier (~1.5×) with chips moved above the mic and more bottom padding; ✅ 완료 chip scores what was said so far; pause fixed at 30 s and the ⏸ chip removed; hint resets after each scored sentence.
 - v3.7.0 (2026/11/19): 유지 button keeps the mic on across sentences (score → fresh capture in the same session). Past lines no longer reveal English unless attempted.
