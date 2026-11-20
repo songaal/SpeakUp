@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3.12.0">
+<link rel="stylesheet" href="style.css?v=3.13.0">
 </head>
 <body class="v-lib">
 
@@ -29,18 +29,21 @@
       </div>
     </div>
     <button class="iconbtn" id="editModeBtn">✎ 편집</button>
-    <button class="iconbtn" id="settingsBtn" data-i18n-aria="settings" data-i18n-title="settings">⚙︎</button>
+    <button class="iconbtn gear" id="settingsBtn" data-i18n-aria="settings" data-i18n-title="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.5c.1.2.4.3.6.2l2.5-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .2.2.4.5.4h4c.3 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
   </div>
   <div class="libscroll"><div class="libin">
     <div class="warn" id="storeWarn" data-i18n="storeWarn"></div>
     <div id="dlist"></div>
   </div></div>
-  <div class="libbar"><div class="in">
-    <div class="normalbar">
-      <button class="btn pri" id="addBtn" data-i18n="addNew">＋ 새 대화</button>
-      <button class="btn sec" id="importBtn" data-i18n="import">가져오기</button>
-      <button class="btn sec" id="exportBtn" data-i18n="export">내보내기</button>
+  <!-- floating ＋ button: opens two round actions above it -->
+  <div class="fab" id="fab">
+    <div class="fab-menu">
+      <button class="fab-item" id="importBtn"><span class="fab-lbl" data-i18n="import">가져오기</span><span class="fab-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0-4.5-4.5M12 14l4.5-4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+      <button class="fab-item" id="addBtn"><span class="fab-lbl" data-i18n="fabNew">새 대화</span><span class="fab-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
     </div>
+    <button class="fab-main" id="fabBtn" aria-expanded="false" data-i18n-aria="addMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="libbar"><div class="in">
     <div class="editbar">
       <button class="btn sec" id="selAllBtn">전체 선택</button>
       <button class="btn sec" id="exSelBtn" disabled>내보내기</button>
@@ -144,6 +147,10 @@
         <button class="chip" data-lang="en">English</button>
       </div>
     </div>
+    <div class="setrow">
+      <div class="setlbl" data-i18n="dataLabel">데이터</div>
+      <button class="btn sec setbtn" id="exportBtn" data-i18n="exportAll">전체 내보내기</button>
+    </div>
     <p class="ver" id="verText"></p>
     <div class="btns"><button class="btn sec" id="setClose" data-i18n="close">닫기</button></div>
   </div>
@@ -165,6 +172,6 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=3.12.0"></script>
+<script type="module" src="js/app.js?v=3.13.0"></script>
 </body>
 </html>

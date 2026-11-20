@@ -29,11 +29,14 @@ wrangler.jsonc           Cloudflare Worker (static assets only, custom domain sp
 
 ## Views (app.js)
 `library` → tap card → `info` (stats tiles: sentences / words / 연습한 문장 = total scored attempts for this dialogue; Start / Resume buttons right under the stats; full text list with best % per line) → `player`.
-- Library card: title + `N문장 · 연습 N문장 · 마지막 <date>` (or 아직 연습 안 함). No "완벽 x/N" and no progress bar (owner removed them).
-- Library: edit mode (✎ 편집) shows checkboxes (multi-delete with in-page confirm modal, or **export only the selected** ones) and ▲▼ reorder buttons. `＋ 새 대화` opens the editor sheet; 가져오기 (file input, .md/.json, many files, **appends**); 내보내기 (sheet with MD/JSON tabs, Copy, Save file).
+- Library list is **sorted newest-created first** (display only; `lib` array order is untouched) and each card has a number badge counting down N…1 (newest = N). No manual reorder (▲▼ removed when sorting was introduced).
+- Library card: number + title + `N문장 · 연습 N문장 · 마지막 <date>` (or 아직 연습 안 함). No "완벽 x/N" and no progress bar (owner removed them).
+- Floating round ＋ button (bottom-right, `#fab`): tap → two round actions pop up above it — 새 대화 (editor sheet) and 가져오기 (file input, .md/.json, many files, **appends**); outside tap closes. Hidden in edit mode.
+- Edit mode (✎ 편집) shows checkboxes and a bottom bar: 전체 선택 / N개 내보내기 / N개 삭제 (in-page confirm modal). The edit bar is the library's only bottom bar.
+- Export of everything lives in ⚙︎ Settings › 데이터 › 전체 내보내기 (sheet with MD/JSON tabs, Copy, Save file).
 - 📋 프롬프트: popover with `CONVERT_PROMPT`; opening it copies to clipboard; closes on outside pointerdown, window blur, Esc, or toggling.
 - Finish screen (`showFinish`): shown 1.3 s after the **last** sentence scores 100%, or when › is tapped on the last line after attempting it. Full-screen: 🏆, dialogue title, average of this session's attempt scores, tiles (perfect / spoken out of N / time since the player opened), a random perseverance quote (`QUOTES`; English + Korean translation and author in ko UI, English only in en UI), canvas confetti (~5 s, own code) and a synthesized "빰빠밤" fanfare (`fanfare()`, Web Audio arpeggio → major chord). 완료 → library.
-- ⚙︎ Settings sheet (library header): app language + version line.
+- ⚙︎ Settings sheet (library header, SVG gear icon): app language, 전체 내보내기, version line.
 - Info: ✎ 수정 opens the editor with that dialogue as md; saving with extra `---` sections inserts them as new dialogues after it. The editor also has 삭제.
 - Player: vertical script. Current line centred (big, Korean + masked English word slots + "heard" box); previous lines above and next lines below show **Korean only** (never the English — it is the answer, even for solved lines), faded, with the session score badge on past lines. Free swipe/wheel scroll with CSS `scroll-snap`; when scrolling settles (`onScrollSettle`, 130 ms debounce) the line nearest the centre becomes current. Programmatic scrolls set `progScrollUntil` so they don't re-trigger selection.
 
@@ -83,7 +86,8 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 - Hint only fills blanks, never re-hides correct words.
 - After scoring, show the correct word in place of each mistake — readable like the 정답 hint, marked wrong only by the red slot — with the heard word underneath.
 - Notify (toast) when Chrome drops recognition rather than silently ending.
-- Lists: reorder, multi-select delete, edit inside the dialogue, big textarea for adding.
+- Lists: newest first with countdown numbers, multi-select delete/export, edit inside the dialogue, big textarea for adding, floating ＋ for add/import.
+- Give every screen generous bottom space (owner found the bottoms cramped): player dock `40px + safe-area`, sheets `32px`, library bottom padding leaves room for the FAB, info `48px`, finish `44px`.
 
 - Info page: no "perfect sentences" progress box and no unique-word / average-length stats (owner removed them); Start sits where the progress box was.
 - No login/auth: data never leaves the browser, so others visiting the site can't see it. Owner agreed (2026/11/19) to stay login-free; only revisit if server sync is added.
@@ -91,9 +95,10 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.12.0 — 2026/11/19** (also `VERSION` in app.js, shown in Settings)
+- **Current version: v3.13.0 — 2026/11/20** (also `VERSION` in app.js, shown in Settings)
 
 ## Changelog
+- v3.13.0 (2026/11/20): library sorted newest first with countdown numbers (manual reorder removed); floating ＋ with 새 대화 / 가져오기; 전체 내보내기 moved to Settings; bigger SVG gear; more bottom space on every screen.
 - v3.12.0 (2026/11/19): filled words stay filled across retries of a line (session); zoom disabled (pinch, double-tap, focus) with text selection still allowed.
 - v3.11.0 (2026/11/19): finish screen after the last sentence (average score, stats, confetti, fanfare, perseverance quote, 완료 → list). Settings with app language (system default / 한국어 / English) — all UI strings moved to i18n.js; English version of the AI prompt.
 - v3.10.0 (2026/11/19): scoring = blanks filled (accumulated over every try in the attempt; extra/wrong words no longer lower the score). Non-current lines never show English.

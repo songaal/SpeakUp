@@ -2,7 +2,7 @@
 import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, fillWords, scoreAttempt, dialogStats } from "./core.js";
 import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT, CONVERT_PROMPT_EN } from "./content.js";
 import { t, lang, setLang, langChoice, setLangChoice, resolveLang, applyStatic, QUOTES } from "./i18n.js";
-const VERSION = "3.12.0";
+const VERSION = "3.13.0";
 const promptText = () => lang() === "en" ? CONVERT_PROMPT_EN : CONVERT_PROMPT;
 
 /* ================= store (localStorage) ================= */
@@ -74,13 +74,14 @@ function renderLib() {
     el.innerHTML = `<div class="empty">${t("empty")}<br><button class="btn pri" id="addSample">${t("addSample")}</button></div>`;
     $("addSample").onclick = () => addDialogs(parseMd(SAMPLE_MD));
   } else {
-    el.innerHTML = lib.map((d, i) => {
+    const sorted = [...lib].sort((a, b) => (b.created || 0) - (a.created || 0));   // newest first, numbered N…1
+    el.innerHTML = sorted.map((d, i) => {
       const n = d.lines.length, cnt = countMap[d.id] || 0, last = lastMap[d.id], sel = selected.has(d.id);
       return `<div class="dcard ${sel ? "sel" : ""}" data-id="${d.id}">
         <span class="chk">${sel ? "✓" : ""}</span>
+        <span class="dno">${sorted.length - i}</span>
         <div class="dmain"><div class="dt">${esc(d.title)}</div>
           <div class="dm">${t("cardMeta", n, cnt, last ? relDate(last) : "")}</div></div>
-        <div class="mv"><button data-mv="-1" ${i === 0 ? "disabled" : ""} aria-label="${t("moveUp")}">▲</button><button data-mv="1" ${i === lib.length - 1 ? "disabled" : ""} aria-label="${t("moveDown")}">▼</button></div>
         <span class="chev">›</span></div>`;
     }).join("");
   }
@@ -91,16 +92,15 @@ function renderLib() {
 }
 $("dlist").addEventListener("click", e => {
   const c = e.target.closest(".dcard"); if (!c) return;
-  const id = c.dataset.id, mv = e.target.closest("[data-mv]");
-  if (mv) {                                                       // reorder (edit mode)
-    const i = lib.findIndex(d => d.id === id), j = i + +mv.dataset.mv;
-    if (j < 0 || j >= lib.length) return;
-    [lib[i], lib[j]] = [lib[j], lib[i]]; saveLib(); renderLib(); return;
-  }
+  const id = c.dataset.id;
   if (editing) { selected.has(id) ? selected.delete(id) : selected.add(id); renderLib(); }
   else openInfo(id);
 });
-$("editModeBtn").onclick = () => { editing = !editing; selected.clear(); renderLib(); };
+$("editModeBtn").onclick = () => { editing = !editing; selected.clear(); setFab(false); renderLib(); };
+// floating ＋: tap → 새 대화 / 가져오기 pop up above it; outside tap closes
+function setFab(open) { $("fab").classList.toggle("open", open); $("fabBtn").setAttribute("aria-expanded", open); }
+$("fabBtn").onclick = () => setFab(!$("fab").classList.contains("open"));
+document.addEventListener("pointerdown", e => { if (!e.target.closest("#fab")) setFab(false); });
 $("selAllBtn").onclick = () => { if (selected.size === lib.length) selected.clear(); else lib.forEach(d => selected.add(d.id)); renderLib(); };
 $("delSelBtn").onclick = async () => {
   if (!selected.size) return;
@@ -134,7 +134,7 @@ function openEditor(mode) {
   setTimeout(() => $("editor").focus(), 50);
 }
 const closeEditor = () => $("edOverlay").classList.remove("show");
-$("addBtn").onclick = () => openEditor("add");
+$("addBtn").onclick = () => { setFab(false); openEditor("add"); };
 $("infoEdit").onclick = () => openEditor("edit");
 $("editDlgBtn").onclick = () => { if (listening) stopListening(true); openEditor("edit"); };
 $("edCancel").onclick = closeEditor;
@@ -156,7 +156,7 @@ $("edDelete").onclick = async () => {
 };
 
 /* ---- import (.md / .json, appended) ---- */
-$("importBtn").onclick = () => $("fileIn").click();
+$("importBtn").onclick = () => { setFab(false); $("fileIn").click(); };
 $("fileIn").onchange = async e => {
   const files = [...e.target.files]; e.target.value = "";
   let added = [], bad = 0;
@@ -181,7 +181,7 @@ function fillExport() {
   $("exDown").style.display = (!inArtifact || downloads) ? "" : "none";
 }
 function openExport(list) { exList = list; fillExport(); $("exOverlay").classList.add("show"); }
-$("exportBtn").onclick = () => { if (!lib.length) { toast(t("nothingToExport")); return; } openExport(lib); };
+$("exportBtn").onclick = () => { $("setOverlay").classList.remove("show"); if (!lib.length) { toast(t("nothingToExport")); return; } openExport(lib); };
 $("exSelBtn").onclick = () => { if (selected.size) openExport(lib.filter(d => selected.has(d.id))); };   // keeps list order
 $("exMd").onclick = () => { exFmt = "md"; fillExport(); };
 $("exJson").onclick = () => { exFmt = "json"; fillExport(); };
