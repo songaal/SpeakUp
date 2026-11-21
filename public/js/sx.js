@@ -370,7 +370,7 @@ function paintProg() {
 }
 
 function renderQ(dir) {
-  clearTimeout(autoT); hintLv = 0; liveSt = null; $("stErr").className = "err";
+  drEnd(); clearTimeout(autoT); hintLv = 0; liveSt = null; $("stErr").className = "err";
   const q = qOf(), qi = qiOf(), r = S.res[qi];
   filled = new Set(keep[qi] || []);
   saveSess();
@@ -503,18 +503,70 @@ function paintBlocks() {
   el.innerHTML = `<div class="tray ${res ? "checked" : ""} ${s.placed.length ? "" : "empty"}" id="stTray">${trayBlocks || `<span class="ph">${t("sxTapBlocks")}</span>`}</div>
     <div class="pool" id="stPool">${s.blocks.map((b, i) => `<button class="blk ${used.has(i) ? "used" : ""} ${s.glow === i ? "glow" : ""}" data-pool="${i}" ${used.has(i) || res ? "disabled" : ""}>${esc(b.text)}</button>`).join("")}</div>
     ${res ? answerLine(q) : ""}`;
-  el.querySelectorAll("[data-pool]").forEach(b => b.onclick = () => placeBlock(+b.dataset.pool));
-  el.querySelectorAll("[data-tray]").forEach(b => b.onclick = () => unplace(+b.dataset.tray));
   $("stCheck").disabled = !(s.placed.length === s.blocks.length && !s.checked);
   $("stCheck").classList.toggle("next", !!s.checked);
 }
-function placeBlock(i) {
+// at: position in the tray (default: the end). Placing the last block checks by itself.
+function placeBlock(i, at = null) {
   unlockAudio(); const s = wstate(qiOf()); if (s.checked || s.placed.includes(i)) return;
-  s.placed.push(i); s.glow = -1; tick(); haptic(8);
-  if (s.placed.length === s.blocks.length) { paintBlocks(); setTimeout(checkWord, 220); return; }   // last block → check by itself
-  paintBlocks(); const tray = $("stTray"); if (tray && tray.lastElementChild) tray.lastElementChild.classList.add("landed");
+  const k = at == null ? s.placed.length : at;
+  s.placed.splice(k, 0, i); s.glow = -1; tick(); haptic(8);
+  paintBlocks(); const b = $("stTray") && $("stTray").children[k]; if (b) b.classList.add("landed");
+  if (s.placed.length === s.blocks.length) { const qi = qiOf(); setTimeout(() => { if (S && qiOf() === qi) checkWord(); }, 260); }
 }
 function unplace(k) { const s = wstate(qiOf()); if (s.checked) return; s.placed.splice(k, 1); tick(); paintBlocks(); }
+/* ---- hold a block (150 ms) and drag it, like Word Story's block test: into the tray at any position,
+ * reorder inside the tray, or drop a placed block outside the tray to send it back. Moving > 8 px before
+ * the hold = a scroll (or a swipe). A ghost follows the finger; a blue bar marks where it will land. ---- */
+let dr = null, drDone = 0;
+const inside = (el, x, y) => { if (!el) return false; const r = el.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; };
+function drDown(e) {
+  if (!S || !wordMode || (e.pointerType === "mouse" && e.button !== 0)) return;
+  const b = e.target.closest(".blk[data-pool],.blk[data-tray]"); if (!b || b.disabled || b.classList.contains("used")) return;
+  if (wstate(qiOf()).checked) return;
+  drEnd();
+  const fromTray = b.dataset.tray != null;
+  dr = { b, id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, on: false, fromTray, idx: +(fromTray ? b.dataset.tray : b.dataset.pool), tgt: undefined, tm: setTimeout(drStart, 150) };
+}
+function drStart() {
+  const d = dr; if (!d || !S) return;
+  d.on = true; haptic(30);
+  try { d.b.setPointerCapture(d.id); } catch (e) {}
+  const r = d.b.getBoundingClientRect(); d.dx = d.x0 - r.left; d.dy = d.y0 - r.top;
+  const g = d.b.cloneNode(true); g.className = "blk ghost"; g.removeAttribute("data-pool"); g.removeAttribute("data-tray"); g.style.width = r.width + "px";
+  document.body.appendChild(g); d.g = g; d.b.classList.add("dsrc");
+  drMove();
+}
+// index among the other placed blocks where the dragged block would go, or null when not over the tray
+function drTarget() {
+  const d = dr, tray = $("stTray"); if (!inside(tray, d.x, d.y)) return null;
+  const list = [...tray.querySelectorAll("[data-tray]")].filter(b => b !== d.b);
+  for (let i = 0; i < list.length; i++) { const r = list[i].getBoundingClientRect(); if (d.y < r.top || (d.y <= r.bottom && d.x < r.left + r.width / 2)) return i; }
+  return list.length;
+}
+function drMove() {
+  const d = dr; if (!d || !d.g) return;
+  d.g.style.left = (d.x - d.dx) + "px"; d.g.style.top = (d.y - d.dy) + "px";
+  const t = drTarget(); if (t === d.tgt) return; d.tgt = t;
+  const tray = $("stTray"); tray.querySelectorAll(".gapm").forEach(x => x.remove()); tray.classList.toggle("dropin", t != null);
+  if (t == null) return;
+  const m = document.createElement("span"); m.className = "gapm";
+  const list = [...tray.querySelectorAll("[data-tray]")].filter(b => b !== d.b);
+  if (t < list.length) tray.insertBefore(m, list[t]); else tray.appendChild(m);
+}
+function drDrop() {
+  const d = dr, t = drTarget(), s = wstate(qiOf()); drDone = Date.now();
+  drEnd();
+  if (t != null) {
+    if (d.fromTray) { const w = s.placed.splice(d.idx, 1)[0]; s.placed.splice(t, 0, w); tick(); haptic(20); paintBlocks(); const b = $("stTray").children[t]; if (b) b.classList.add("landed"); }
+    else placeBlock(d.idx, t);
+  } else if (d.fromTray) { s.placed.splice(d.idx, 1); tick(); haptic(20); paintBlocks(); }   // dropped outside the tray: back to the pool
+}
+function drEnd() {
+  const d = dr; if (!d) return; dr = null;
+  clearTimeout(d.tm); if (d.g) d.g.remove(); if (d.b) d.b.classList.remove("dsrc");
+  const tray = $("stTray"); if (tray) { tray.querySelectorAll(".gapm").forEach(x => x.remove()); tray.classList.remove("dropin"); }
+}
 function checkWord() {
   const q = qOf(), qi = qiOf(), s = wstate(qi); if (s.checked || s.placed.length !== s.blocks.length) return;
   s.result = checkBlocks(s.answerKeys, s.placed.map(p => s.blocks[p].key)); s.checked = true;
@@ -522,7 +574,7 @@ function checkWord() {
   paintBlocks();
 }
 function resetWord() {
-  const qi = qiOf(); delete W[qi];
+  drEnd(); const qi = qiOf(); delete W[qi];
   if (S.res[qi] && S.res[qi].kind === "word") { delete S.res[qi]; paintResultPill(null); paintProg(); }
   paintBlocks();
 }
@@ -644,10 +696,29 @@ export function initSx(ctx) {
   ["stPrev", "stPrevW"].forEach(id => $(id).onclick = prevQ);
   ["stNext", "stNextW"].forEach(id => $(id).onclick = () => { unlockAudio(); nextQ(); });
   // horizontal swipe on the question = previous / next
+  // word blocks: tap = place / take back (ignored right after a drag); hold = drag (see drDown)
+  $("stStage").addEventListener("click", e => {
+    if (!S || !wordMode || Date.now() - drDone < 450) return;
+    const p = e.target.closest("[data-pool]"), tr = e.target.closest("[data-tray]");
+    if (p && !p.disabled) placeBlock(+p.dataset.pool); else if (tr) unplace(+tr.dataset.tray);
+  });
+  $("stStage").addEventListener("pointerdown", drDown);
+  document.addEventListener("pointermove", e => {
+    const d = dr; if (!d || e.pointerId !== d.id) return;
+    d.x = e.clientX; d.y = e.clientY;
+    if (!d.on) { if (Math.hypot(d.x - d.x0, d.y - d.y0) > 8) drEnd(); return; }
+    drMove();
+  });
+  document.addEventListener("pointerup", e => { const d = dr; if (!d || e.pointerId !== d.id) return; if (d.on) drDrop(); else drEnd(); });
+  document.addEventListener("pointercancel", e => { if (dr && e.pointerId === dr.id) { if (dr.on) drDone = Date.now(); drEnd(); } });
+  document.addEventListener("touchmove", e => { if (dr && dr.on) e.preventDefault(); }, { passive: false });   // no scrolling while dragging
+  $("stStage").addEventListener("contextmenu", e => { if (e.target.closest(".blk")) e.preventDefault(); });
   let sx0 = null;
   $("stStage").addEventListener("pointerdown", e => { sx0 = { x: e.clientX, y: e.clientY, t: Date.now() }; });
   $("stStage").addEventListener("pointerup", e => {
-    if (!sx0) return; const dx = e.clientX - sx0.x, dy = e.clientY - sx0.y, dt = Date.now() - sx0.t; sx0 = null;
+    if (!sx0) return;
+    if (Date.now() - drDone < 450 || dr) { sx0 = null; return; }   // a block drag is not a swipe
+    const dx = e.clientX - sx0.x, dy = e.clientY - sx0.y, dt = Date.now() - sx0.t; sx0 = null;
     if (Math.abs(dx) > 70 && Math.abs(dy) < 50 && dt < 600) dx < 0 ? nextQ() : prevQ();
   });
   document.addEventListener("keydown", e => {

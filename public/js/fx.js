@@ -52,7 +52,16 @@ export function fanfare() {
     });
   } catch (e) {}
 }
-export function haptic(ms = 12) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+// navigator.vibrate where it exists (Android); on iOS 18+ clicking a hidden <input type=checkbox switch> gives a tap.
+let hapL = null;
+export function haptic(ms = 12) {
+  try { if (navigator.vibrate && navigator.vibrate(ms)) return; } catch (e) {}
+  try {
+    if (!hapL) { hapL = document.createElement("label"); hapL.setAttribute("aria-hidden", "true"); hapL.style.cssText = "position:fixed;left:-200px;top:0;opacity:0;pointer-events:none";
+      const i = document.createElement("input"); i.type = "checkbox"; i.setAttribute("switch", ""); i.tabIndex = -1; hapL.appendChild(i); document.body.appendChild(hapL); }
+    hapL.click();
+  } catch (e) {}
+}
 
 // Canvas confetti, ~5 s. One animation per canvas.
 const rafs = new WeakMap();
