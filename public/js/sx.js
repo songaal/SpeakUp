@@ -12,7 +12,7 @@ import { chime, thud, tick, fanfare, unlockAudio, startConfetti, stopConfetti, s
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-const K = { meta: "speakup.sx.v1", best: "speakup.sxbest.v1", pos: "speakup.sxpos.v1", word: "speakup.sxword.v1", auto: "speakup.sxauto.v1", mode: "speakup.mode.v1" };
+const K = { meta: "speakup.sx.v1", best: "speakup.sxbest.v1", pos: "speakup.sxpos.v1", word: "speakup.sxword.v1", auto: "speakup.sxauto.v1", mode: "speakup.mode.v1", sess: "speakup.sxsess.v1", keep: "speakup.sxkeep.v1" };
 const ls = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { C.toast(t("sxStoreFull")); } },
@@ -20,8 +20,8 @@ const ls = {
 let C = null;   // context from app.js: {showView, view(), toast, ask, renderLib}
 let meta = ls.get(K.meta, null); if (!meta || !Array.isArray(meta.trainings)) meta = { trainings: [] };
 let best = ls.get(K.best, {});      // "chapterId|itemIndex|questionKey" → best score
-let posMap = ls.get(K.pos, {});     // "chapterId|itemIndex" → question index to resume at
-let wordMode = ls.get(K.word, false), autoNext = ls.get(K.auto, true);
+let sess = ls.get(K.sess, {});      // "chapterId|itemIndex" → unfinished run {pos, res:{qi: score}, start} (이어서)
+let wordMode = ls.get(K.word, false), autoNext = ls.get(K.auto, true), keepOn = ls.get(K.keep, false);
 const saveMeta = () => ls.set(K.meta, meta);
 const cache = new Map();            // chapterId → parsed chapter (loaded into memory once)
 const transition = fn => (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) ? document.startViewTransition(fn) : fn();
@@ -153,10 +153,7 @@ async function renderSx() {
     const d = cache.get(ch.id), it = d && d.items[nav.it]; if (!it) { nav.it = null; renderSx(); return; }
     $("sxTitle").textContent = it.kind === "unit" ? `${it.no} · ${it.focus}` : itemTitle(it);
     body.innerHTML = it.kind === "unit" ? unitHTML(ch.id, nav.it, it) : it.kind === "tips" ? tipsHTML(it) : storyHTML(ch.id, nav.it, it);
-    body.querySelectorAll("[data-q]").forEach(el => el.onclick = () => startTest(+el.dataset.q));
-    const st = $("sxStart"), rs = $("sxResume");
-    if (st) st.onclick = () => startTest(0);
-    if (rs) rs.onclick = () => startTest(+rs.dataset.at);
+
   }
 }
 const emptyHint = (ic, msg) => `<div class="sx-empty small"><div class="sx-empty-ic">${ic}</div><p>${msg}</p></div>`;
@@ -166,9 +163,9 @@ const chunkHTML = cs => cs.length ? `<div class="chunks">${cs.map(c => `<span>${
 const bsHTML = v => `<span class="bs ${v === 100 ? "p" : ""}">${v != null ? v + "%" : ""}</span>`;
 function startButtons(cid, ii, n) {
   if (!n) return "";
-  const at = Math.min(posMap[`${cid}|${ii}`] || 0, n - 1);
-  return `<div class="startrow sxstart">${at > 0
-    ? `<button class="btn sec" id="sxStart">${t("fromStart")}</button><button class="btn pri" id="sxResume" data-at="${at}">${t("resumeAt", at + 1)}</button>`
+  const ss = sess[`${cid}|${ii}`], done = ss ? Object.keys(ss.res || {}).length : 0;
+  return `<div class="startrow sxstart">${ss && (ss.pos > 0 || done)
+    ? `<button class="btn sec" id="sxStart">▶ ${t("sxTestN", n)}</button><button class="btn pri" id="sxResume">⏯ ${t("sxResumeAt", Math.min(ss.pos, n - 1) + 1, n)}</button>`
     : `<button class="btn pri" id="sxStart">▶ ${t("sxTestN", n)}</button>`}</div>`;
 }
 function unitHTML(cid, ii, u) {
@@ -179,13 +176,13 @@ function unitHTML(cid, ii, u) {
     <div class="stats"><div class="stat"><b>${s.total}</b><span>${t("sxQuestions")}</span></div><div class="stat"><b>${s.done}</b><span>${t("sxTried")}</span></div><div class="stat"><b>${s.avg != null ? s.avg + "%" : "–"}</b><span>${t("sxAvg")}</span></div></div>
     ${startButtons(cid, ii, qs.length)}
     <h3 class="sxh"><span class="sec s1">STEP 1</span>${t("sxSecSteps")}</h3>
-    <ul class="tl qtl">${u.steps.map((st, i) => `<li data-q="${idxOf("s1:" + i)}"><span class="no">${i + 1}</span><div class="tx"><div class="te">${slashHTML(st.ko)}</div>${hintChips(hintList(st.hint))}</div>${bsHTML(b("s1:" + i))}</li>`).join("")}</ul>
+    <ul class="tl qtl">${u.steps.map((st, i) => `<li role="button" tabindex="0" data-q="${idxOf("s1:" + i)}"><span class="no">${i + 1}</span><div class="tx"><div class="te">${slashHTML(st.ko)}</div>${hintChips(hintList(st.hint))}</div>${bsHTML(b("s1:" + i))}</li>`).join("")}</ul>
     ${u.variations.length ? `<h3 class="sxh"><span class="sec var">${t("sxSecVarShort")}</span>${t("sxSecVar")}</h3>
     <ul class="tl qtl">${u.variations.map((v, i) => { const k = idxOf("var:" + i);
-      return `<li ${k >= 0 ? `data-q="${k}"` : ""}><span class="no">${i + 1}</span><div class="tx"><div class="vtype">${esc(v.type)}</div><div class="te">${esc(v.ko)}</div>${chunkHTML(chunksOf(v.chunk))}${hintChips(v.wordHint ? [v.wordHint] : [])}</div>${bsHTML(b("var:" + i))}</li>`; }).join("")}</ul>` : ""}
+      return `<li ${k >= 0 ? `role="button" tabindex="0" data-q="${k}"` : ""}><span class="no">${i + 1}</span><div class="tx"><div class="vtype">${esc(v.type)}</div><div class="te">${esc(v.ko)}</div>${chunkHTML(chunksOf(v.chunk))}${hintChips(v.wordHint ? [v.wordHint] : [])}</div>${bsHTML(b("var:" + i))}</li>`; }).join("")}</ul>` : ""}
     ${u.s2.length ? `<h3 class="sxh"><span class="sec s2">STEP 2</span>${t("sxSecS2")}</h3>
     <ul class="tl qtl">${u.s2.map((x, i) => { const k = idxOf("s2:" + i);
-      return `<li ${k >= 0 ? `data-q="${k}"` : ""}><span class="no">${esc(x.no)}</span><div class="tx"><div class="te">${esc(x.ko)}</div>${chunkHTML(chunksOf(x.chunk))}${hintChips(hintList(x.hint))}</div>${bsHTML(b("s2:" + i))}</li>`; }).join("")}</ul>` : ""}`;
+      return `<li ${k >= 0 ? `role="button" tabindex="0" data-q="${k}"` : ""}><span class="no">${esc(x.no)}</span><div class="tx"><div class="te">${esc(x.ko)}</div>${chunkHTML(chunksOf(x.chunk))}${hintChips(hintList(x.hint))}</div>${bsHTML(b("s2:" + i))}</li>`; }).join("")}</ul>` : ""}`;
 }
 function tipsHTML(it) {
   const pt = p => { const m = p.match(/^예\s*[:：]\s*(.+)$/) || p.match(/^(?:e\.g\.|ex)\s*[:：]?\s*(.+)$/i);
@@ -199,7 +196,7 @@ function storyHTML(cid, ii, st) {
   return `<div class="tiphero story"><span class="ubadge story">📖 LET'S WRITE A STORY</span><div class="tiphero-t">${esc(st.title)}</div></div>
     ${startButtons(cid, ii, qs.length)}
     <ul class="tl qtl">${st.prompts.map((p, i) => { const k = qs.findIndex(q => q.key === "st:" + i);
-      return `<li ${k >= 0 ? `data-q="${k}"` : `class="noq"`}><span class="no">${i + 1}</span><div class="tx"><div class="te">${esc(p.ko)}</div>${/\.\.\.|…/.test(p.template) ? `<div class="tpl">${esc(p.template)}</div>` : ""}${hintChips(hintList(p.hint))}</div>${bsHTML(k >= 0 ? best[`${cid}|${ii}|st:${i}`] : null)}</li>`; }).join("")}</ul>`;
+      return `<li ${k >= 0 ? `role="button" tabindex="0" data-q="${k}"` : `class="noq"`}><span class="no">${i + 1}</span><div class="tx"><div class="te">${esc(p.ko)}</div>${/\.\.\.|…/.test(p.template) ? `<div class="tpl">${esc(p.template)}</div>` : ""}${hintChips(hintList(p.hint))}</div>${bsHTML(k >= 0 ? best[`${cid}|${ii}|st:${i}`] : null)}</li>`; }).join("")}</ul>`;
 }
 
 /* ---- create / edit sheets ---- */
@@ -267,8 +264,8 @@ function editCurrent() {
 function dropChapter(ch) {
   delFile(ch.id); cache.delete(ch.id);
   const pre = ch.id + "|";
-  Object.keys(best).forEach(k => { if (k.startsWith(pre)) delete best[k]; }); Object.keys(posMap).forEach(k => { if (k.startsWith(pre)) delete posMap[k]; });
-  ls.set(K.best, best); ls.set(K.pos, posMap);
+  Object.keys(best).forEach(k => { if (k.startsWith(pre)) delete best[k]; }); Object.keys(sess).forEach(k => { if (k.startsWith(pre)) delete sess[k]; });
+  ls.set(K.best, best); ls.set(K.sess, sess);
 }
 
 // Generic bottom-sheet form. fields: {name, label, type: text|number|file, value, ph, current}
@@ -322,22 +319,36 @@ const refCache = new Map(); const refOf = q => refCache.get(q.en) || (refCache.s
 const rec = createRecognizer({
   bias: () => S && new Set(refOf(qOf()).toks.map(x => x.t)),
   onUpdate: live,
-  onEnd: ({ text, parts, interim, dropped }) => { clearTimeout(silenceT); paintMic(); if (!dropped && S) evaluate(text, parts, interim); },
+  onEnd: ({ text, parts, interim, dropped }) => {
+    clearTimeout(silenceT); paintMic(); if (dropped || !S) return;
+    if (!text && S.res[qiOf()]) { paintAnswer(); return; }        // 유지: mic turned off after the question was scored
+    evaluate(text, parts, interim);
+  },
   onError: code => { $("stErr").textContent = code === "not-allowed" || code === "service-not-allowed" ? t("errMic") : code === "network" ? t("errNetwork") : code === "unsupported" ? t("errUnsupported") : t("errOther", code); $("stErr").className = "err show"; },
   onResume: () => C.toast(t("resumed")),
 });
 const SEC = { s1: "STEP 1", var: null, s2: "STEP 2", story: "STORY" };
 const secLabel = q => q.sec === "s1" ? `STEP 1 · ${q.n}/${q.of}` : q.sec === "var" ? (q.type || t("sxSecVarShort")) : q.sec === "s2" ? `STEP 2 · ${q.no ?? q.n}` : `STORY · ${q.n}/${q.of}`;
 
-function startTest(at = 0, order = null) {
+// how: "new" (테스트 = fresh run from question 1), "resume" (이어서 = saved run at its last question),
+//      "row" (a question tapped on the item page = saved run, at that question). order = retry round of misses.
+function startTest(at = 0, how = "new", order = null) {
   const ch = chapterOf(), it = cache.get(ch.id).items[nav.it], qs = questionsOf(it);
   if (!qs.length) return;
+  const key = `${ch.id}|${nav.it}`, saved = !order && how !== "new" ? sess[key] : null;
   S = { cid: ch.id, ii: nav.it, item: it, qs, order: order || qs.map((_, i) => i), pos: 0, res: {}, start: Date.now(), round: order ? 2 : 1 };
-  S.pos = Math.max(0, Math.min(S.order.length - 1, order ? 0 : at));
+  if (saved) { Object.entries(saved.res || {}).forEach(([qi, sc]) => { if (qs[qi]) S.res[qi] = { kind: "saved", score: sc }; }); S.start = saved.start || S.start; }
+  if (how === "new" && !order) { delete sess[key]; ls.set(K.sess, sess); }
+  S.pos = Math.max(0, Math.min(S.order.length - 1, order ? 0 : how === "resume" && saved ? saved.pos : at));
   W = {}; keep = {}; resultShown = false;
   $("stTitle").textContent = it.kind === "unit" ? `${it.no} · ${it.focus}` : itemTitle(it);
   $("stResult").classList.remove("show");
   transition(() => { C.showView("st"); paintMode(); renderQ(0); });
+}
+function saveSess() {
+  if (!S || S.round !== 1) return;
+  const res = {}; Object.entries(S.res).forEach(([qi, r]) => res[qi] = r.score);
+  sess[`${S.cid}|${S.ii}`] = { pos: S.pos, res, start: S.start }; ls.set(K.sess, sess);
 }
 function stopTest() { if (rec.listening) rec.stop(true); clearTimeout(autoT); clearTimeout(silenceT); hush(); }
 function quitTest() {
@@ -360,8 +371,10 @@ function renderQ(dir) {
   clearTimeout(autoT); hintLv = 0; liveSt = null; $("stErr").className = "err";
   const q = qOf(), qi = qiOf(), r = S.res[qi];
   filled = new Set(keep[qi] || []);
-  posMap[`${S.cid}|${S.ii}`] = qi; ls.set(K.pos, posMap);
-  const card = `<div class="qcard ${dir > 0 ? "in-r" : dir < 0 ? "in-l" : "in"}">
+  saveSess();
+  const prev = S.pos > 0 ? S.qs[S.order[S.pos - 1]] : null;
+  const intro = dir > 0 && prev && prev.sec !== q.sec ? `<div class="secintro">🎉 ${t("sxSecDone", secName(prev.sec))} <b>${t("sxSecNext", secName(q.sec))}</b></div>` : "";
+  const card = `<div class="qcard ${dir > 0 ? "in-r" : dir < 0 ? "in-l" : "in"}">${intro}
       <div class="qtop"><span class="sec ${q.sec}">${esc(secLabel(q))}</span>${q.derived ? `<span class="qnote">${t("sxBuildUp")}</span>` : ""}${bsHTML(best[bestKey(S.cid, S.ii, q)])}</div>
       <div class="qko">${q.parts.length > 1 ? q.parts.map((p, i) => `<span class="${i === q.parts.length - 1 ? "new" : ""}">${esc(p)}</span>`).join(`<i class="sl">/</i>`) : esc(q.ko)}</div>
       ${chunkHTML(q.chunks)}
@@ -373,7 +386,9 @@ function renderQ(dir) {
   paintAnswer();
   paintProg(); paintMic(); updateHint();
   paintResultPill(r);
+  if (rec.listening && !wordMode && !r) live({ finalText: "", interim: "", parts: [] });   // keep mode: still listening on the new question
 }
+const secName = sec => sec === "s1" ? `STEP 1 · ${t("sxSecSteps")}` : sec === "var" ? t("sxSecVarShort") : sec === "s2" ? "STEP 2" : "STORY";
 function paintResultPill(r) {
   const el = $("stResPill");
   if (!r) { el.className = "result"; return; }
@@ -399,7 +414,9 @@ function paintAnswer() {
     ${att ? answerLine(q) : ""}`;
 }
 const answerLine = q => (q.raw !== q.en ? `<div class="rawans">${esc(q.raw)}</div>` : "") + (q.derived ? `<div class="rawnote">ⓘ ${t("sxAnswerFromMain")}</div>` : "");
+let cur = { finalText: "", interim: "", parts: [] };
 function live({ finalText, interim, parts }) {
+  cur = { finalText, interim, parts };
   if (!S || wordMode) return;
   const q = qOf(), qi = qiOf(), full = (finalText + " " + interim).trim();
   if (full && S.res[qi] && S.res[qi].kind === "speak") { delete S.res[qi]; paintResultPill(null); }
@@ -410,8 +427,21 @@ function live({ finalText, interim, parts }) {
   const h = $("stHeard");
   if (h) h.innerHTML = full ? `<span class="label">LISTENING…</span>${esc(finalText)} <span class="interim">${esc(interim)}</span>` : `<span class="label">${t("listening")}</span><span class="ph">${t("listeningPh")}</span>`;
   $("stDone").disabled = !full;
-  clearTimeout(silenceT); if (full) silenceT = setTimeout(() => rec.stop(), 30000);
-  if (filled.size === ref.words.length) rec.stop();          // every blank filled → score now
+  clearTimeout(silenceT); if (full) silenceT = setTimeout(capDone, 30000);
+  if (full && filled.size === ref.words.length) capDone();   // every blank filled → score now
+}
+// The answer for this question is complete (all blanks, ✅ 완료, or 30 s of silence).
+// Normal: stop the mic (onEnd scores). 유지: score now and keep the same session open for the next try / question.
+function capDone() {
+  if (!rec.listening) return;
+  if (!keepOn) { rec.stop(); return; }
+  clearTimeout(silenceT);
+  const { finalText, interim, parts } = cur, text = (finalText + " " + interim).trim();
+  if (!text) return;
+  rec.reset(); cur = { finalText: "", interim: "", parts: [] };
+  evaluate(text, parts, interim);
+  filled = new Set(keep[qiOf()] || []);
+  $("stDone").disabled = true;
 }
 function evaluate(said, parts, interim) {
   const q = qOf(), qi = qiOf(); liveSt = null;
@@ -429,8 +459,13 @@ function record(q, qi, res) {
   paintResultPill(res); paintProg();
   if (res.score === 100) { chime(); haptic(20); } else if (res.kind === "word") { thud(); haptic([10, 40, 10]); }
   const top = $("stStage").querySelector(".qtop .bs"); if (top) top.outerHTML = bsHTML(best[k]);
+  saveSess();
   clearTimeout(autoT);
-  if (autoNext && res.score === 100) autoT = setTimeout(() => { if (S && qiOf() === qi) nextQ(); }, 1300);
+  if (res.score === 100 && rec.listening && keepOn) {
+    if (S.pos === S.order.length - 1) rec.stop(true);             // end of the unit: mic off
+    else if (autoNext) rec.gate(true);                            // ignore speech until the next question is up
+  }
+  if (autoNext && res.score === 100) autoT = setTimeout(() => { if (S && qiOf() === qi) nextQ(); else rec.gate(false); }, 1300);
 }
 
 /* ---- word blocks ---- */
@@ -483,7 +518,8 @@ function wordHint() {
 function paintMic() {
   const m = $("stMic"), on = rec.listening;
   m.classList.toggle("rec", on); m.disabled = !speechEngine();
-  m.title = on ? t("micTalk") : t("micIdle"); m.setAttribute("aria-label", m.title);
+  m.title = on ? (keepOn ? t("micKeep") : t("micTalk")) : t("micIdle"); m.setAttribute("aria-label", m.title);
+  $("stKeep").classList.toggle("on", keepOn); $("stKeep").setAttribute("aria-pressed", keepOn);
   $("stDone").disabled = true;
 }
 function updateHint() {
@@ -491,14 +527,21 @@ function updateHint() {
   if (wordMode) { b.textContent = t("hint0"); b.classList.remove("on"); return; }
   b.textContent = t("hint" + hintLv); b.classList.toggle("on", hintLv > 0);
 }
+// Leaving a question: normal mode drops the mic; 유지 keeps the session and starts a fresh capture.
+function leaveQ() {
+  clearTimeout(silenceT);
+  if (!rec.listening) return;
+  if (keepOn && !wordMode) { rec.reset(); rec.gate(false); cur = { finalText: "", interim: "", parts: [] }; }
+  else rec.stop(true);
+}
 function nextQ() {
-  if (rec.listening) rec.stop(true);
+  leaveQ();
   if (S.pos < S.order.length - 1) { S.pos++; renderQ(1); }
   else if (Object.keys(S.res).length) showResult();
   else C.toast(t("sxLastQ"));
 }
-function prevQ() { if (rec.listening) rec.stop(true); if (S.pos > 0) { S.pos--; renderQ(-1); } }
-function jump(k) { if (rec.listening) rec.stop(true); const d = k - S.pos; S.pos = k; renderQ(Math.sign(d)); }
+function prevQ() { leaveQ(); if (S.pos > 0) { S.pos--; renderQ(-1); } }
+function jump(k) { leaveQ(); const d = k - S.pos; S.pos = k; renderQ(Math.sign(d)); }
 
 function showResult() {
   stopTest(true); resultShown = true;
@@ -506,24 +549,29 @@ function showResult() {
   const avg = done.length ? Math.round(done.reduce((a, r) => a + r.score, 0) / done.length) : 0;
   const perfect = done.filter(r => r.score === 100).length, secs = Math.round((Date.now() - S.start) / 1000);
   const misses = S.order.filter(qi => !S.res[qi] || S.res[qi].score < 100);
+  const left = S.order.filter(qi => !S.res[qi]), complete = !left.length;
+  if (complete && S.round === 1) { delete sess[`${S.cid}|${S.ii}`]; ls.set(K.sess, sess); }   // unit done through STEP 2 → next 테스트 starts fresh
   const secs2 = ["s1", "var", "s2", "story"].map(sec => { const qis = S.order.filter(qi => S.qs[qi].sec === sec); if (!qis.length) return "";
     const sc = qis.map(qi => S.res[qi] ? S.res[qi].score : 0), a = Math.round(sc.reduce((x, y) => x + y, 0) / qis.length);
     return `<div class="rsec"><span class="sec ${sec}">${sec === "var" ? t("sxSecVarShort") : SEC[sec]}</span><i><b style="width:${a}%"></b></i><span>${a}%</span></div>`; }).join("");
-  $("stResBody").innerHTML = `<div class="fin-trophy">${avg >= 90 ? "🏆" : avg >= 60 ? "🎯" : "💪"}</div>
-    <h1 class="fin-title">${S.round > 1 ? t("sxRetryDone") : t("sxUnitDone")}</h1><div class="fin-dlg">${esc($("stTitle").textContent)}</div>
+  const [icon, head] = !complete ? ["📝", t("sxPartial")] : S.round > 1 ? ["🔁", t("sxRetryDone")] : ["🏆", t("sxUnitDone")];
+  $("stResBody").innerHTML = `<div class="fin-trophy ${complete ? "" : "plain"}">${icon}</div>
+    <h1 class="fin-title ${complete ? "" : "partial"}">${head}</h1><div class="fin-dlg">${esc($("stTitle").textContent)}${complete ? "" : ` · ${t("sxLeftN", left.length)}`}</div>
     <div class="fin-score">${avg}%</div><div class="fin-score-l">${t("finAvg")}</div>
     <div class="fin-stats"><div><b>${perfect}/${n}</b><span>${t("finPerfect")}</span></div><div><b>${done.length}/${n}</b><span>${t("sxAnswered")}</span></div><div><b>${t("minSec", Math.floor(secs / 60), secs % 60)}</b><span>${t("finTime")}</span></div></div>
     <div class="rsecs">${secs2}</div>
     <ul class="rlist">${S.order.map((qi, k) => { const q = S.qs[qi], r = S.res[qi];
       return `<li data-k="${k}"><span class="sec ${q.sec}">${esc(secLabel(q))}</span><div class="rq"><div class="rko">${esc(q.ko)}</div><div class="ren">${esc(q.raw)}</div></div>${r ? `<span class="badge ${r.score >= 80 ? "g" : r.score >= 50 ? "m" : "l"}">${r.score}%</span>` : `<span class="badge">–</span>`}</li>`; }).join("")}</ul>
-    <div class="rbtns">${misses.length ? `<button class="btn pri" id="stRetry">↻ ${t("sxRetryMissed", misses.length)}</button>` : ""}
-      <button class="btn sec" id="stAgain">${t("sxAgain")}</button><button class="btn ${misses.length ? "sec" : "pri"}" id="stFinDone">${t("finDone")}</button></div>`;
+    <div class="rbtns">${!complete ? `<button class="btn pri" id="stLeft">▶ ${t("sxDoLeft", left.length)}</button>`
+        : misses.length ? `<button class="btn pri" id="stRetry">↻ ${t("sxRetryMissed", misses.length)}</button>` : ""}
+      <button class="btn sec" id="stAgain">${t("sxAgain")}</button><button class="btn ${complete && !misses.length ? "pri" : "sec"}" id="stFinDone">${t("finDone")}</button></div>`;
   $("stResult").classList.add("show"); $("stResult").scrollTop = 0;
   $("stResBody").querySelectorAll("[data-k]").forEach(li => li.onclick = () => { $("stResult").classList.remove("show"); jump(+li.dataset.k); });
-  if ($("stRetry")) $("stRetry").onclick = () => { const o = misses; $("stResult").classList.remove("show"); stopConfetti($("stConfetti")); startTest(0, o); };
-  $("stAgain").onclick = () => { $("stResult").classList.remove("show"); stopConfetti($("stConfetti")); startTest(0); };
-  $("stFinDone").onclick = () => { $("stResult").classList.remove("show"); posMap[`${S.cid}|${S.ii}`] = 0; ls.set(K.pos, posMap); quitTest(); };
-  fanfare(); if (avg >= 60) startConfetti($("stConfetti"));
+  if ($("stLeft")) $("stLeft").onclick = () => { $("stResult").classList.remove("show"); jump(S.order.indexOf(left[0])); };
+  if ($("stRetry")) $("stRetry").onclick = () => { const o = misses; $("stResult").classList.remove("show"); stopConfetti($("stConfetti")); startTest(0, "new", o); };
+  $("stAgain").onclick = () => { $("stResult").classList.remove("show"); stopConfetti($("stConfetti")); startTest(0, "new"); };
+  $("stFinDone").onclick = () => { $("stResult").classList.remove("show"); quitTest(); };
+  if (complete) { fanfare(); startConfetti($("stConfetti")); }
 }
 function openGrid() {
   $("stGridBody").innerHTML = S.order.map((qi, k) => { const r = S.res[qi], q = S.qs[qi];
@@ -537,6 +585,15 @@ export function initSx(ctx) {
   C = ctx; paintTabs();
   $("modeTabs").addEventListener("click", e => { const b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });
   $("sxBack").onclick = back; $("sxMore").onclick = editCurrent;
+  // item page: one delegated handler (rows of every section, 테스트, 이어서)
+  const openRow = e => {
+    if (e.target.closest("#sxStart")) { startTest(0, "new"); return true; }
+    if (e.target.closest("#sxResume")) { startTest(0, "resume"); return true; }
+    const li = e.target.closest("[data-q]"); if (li && level() === "item") { startTest(+li.dataset.q, "row"); return true; }
+    return false;
+  };
+  $("sxBody").addEventListener("click", openRow);
+  $("sxBody").addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && openRow(e)) e.preventDefault(); });
   $("sxfOverlay").addEventListener("click", e => { if (e.target.id === "sxfOverlay") $("sxfOverlay").classList.remove("show"); });
   $("stQuit").onclick = quitTest;
   $("stCount").onclick = openGrid;
@@ -554,7 +611,8 @@ export function initSx(ctx) {
     filled = new Set(keep[qi] || []); liveSt = null; $("stErr").className = "err"; hush();
     rec.start(); paintMic(); live({ finalText: "", interim: "", parts: [] });
   };
-  $("stDone").onclick = () => { unlockAudio(); if (rec.listening) rec.stop(); };
+  $("stKeep").onclick = () => { keepOn = !keepOn; ls.set(K.keep, keepOn); paintMic(); if (rec.listening) $("stDone").disabled = !(cur.finalText + cur.interim).trim(); C.toast(keepOn ? t("keepOnToast") : t("keepOffToast")); };
+  $("stDone").onclick = () => { unlockAudio(); capDone(); };
   $("stHint").onclick = () => { if (wordMode) { wordHint(); return; } hintLv = (hintLv + 1) % 3; updateHint(); paintAnswer(); };
   [$("stPlay"), $("stPlayW")].forEach(b => b.onclick = () => { if (rec.listening) rec.stop(true); say(qOf().en); });
   $("stAutoBtn").onclick = () => { autoNext = !autoNext; ls.set(K.auto, autoNext); paintMode(); };

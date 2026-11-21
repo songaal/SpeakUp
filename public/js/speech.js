@@ -13,6 +13,8 @@ export const speechEngine = () => hub.dictation ? "dictation" : SR ? "native" : 
 export function createRecognizer(opts) {
   let rec = null, listening = false, finished = true, stopReq = false, drop = false;
   let base = "", finalText = "", interim = "", parts = [], baseParts = 0;
+  let consumed = 0, lastLen = 0;    // native: results before `consumed` belong to earlier questions (keep mode)
+  let skipFinal = false, gated = false;   // dictation: drop the rest of a phrase cut by reset(); gated: ignore speech
   const emit = () => opts.onUpdate({ finalText, interim, parts: [...parts] });
   function done() {
     if (finished) return; finished = true; listening = false; hub.owner = null;
@@ -20,10 +22,12 @@ export function createRecognizer(opts) {
   }
   function nativeStart() {
     rec = new SR(); rec.lang = "en-US"; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 3;
+    consumed = 0; lastLen = 0;
     rec.onresult = e => {
+      lastLen = e.results.length; if (gated) return;
       const set = opts.bias ? opts.bias() : null;
       let fin = "", inter = ""; const ps = [];
-      for (let i = 0; i < e.results.length; i++) {
+      for (let i = consumed; i < e.results.length; i++) {
         const r = e.results[i];
         if (r.isFinal) {
           let ba = r[0].transcript, bh = -1;
@@ -47,12 +51,12 @@ export function createRecognizer(opts) {
   return {
     get listening() { return listening; },
     start() {
-      base = ""; finalText = ""; interim = ""; parts = []; baseParts = 0; finished = false; listening = true; stopReq = false; drop = false;
+      base = ""; finalText = ""; interim = ""; parts = []; baseParts = 0; finished = false; gated = false; skipFinal = false; listening = true; stopReq = false; drop = false;
       const eng = speechEngine();
       if (eng === "dictation") {
         hub.owner = {
-          partial: text => { if (listening) { interim = text || ""; emit(); } },
-          final: text => { if (!listening) return; finalText = (finalText + " " + (text || "")).trim(); if (text) parts.push(text); interim = ""; emit(); },
+          partial: text => { if (listening && !gated && !skipFinal) { interim = text || ""; emit(); } },
+          final: text => { if (!listening) return; if (skipFinal || gated) { skipFinal = false; return; } finalText = (finalText + " " + (text || "")).trim(); if (text) parts.push(text); interim = ""; emit(); },
           state: s => { if (s === "idle" && !finished) done(); },
         };
         return hub.dictation.start().catch(err => { const r = String(err && (err.code || err.message) || err); finished = true; listening = false; hub.owner = null; opts.onError && opts.onError(/not_granted/.test(r) ? "not-allowed" : r); });
@@ -60,6 +64,9 @@ export function createRecognizer(opts) {
       if (eng === "native") { try { nativeStart(); } catch (e) { finished = true; listening = false; opts.onError && opts.onError("start"); } return; }
       finished = true; listening = false; opts.onError && opts.onError("unsupported");
     },
+    // Keep mode: the session stays open, the next capture starts empty (what was said so far is forgotten).
+    reset() { consumed = lastLen; skipFinal = !!interim.trim(); base = ""; finalText = ""; interim = ""; parts = []; baseParts = 0; },
+    gate(on) { gated = !!on; },
     stop(dropIt = false) {
       if (finished) return; stopReq = true; drop = dropIt;
       if (speechEngine() === "dictation") hub.dictation.stop().catch(() => {}).finally(done);

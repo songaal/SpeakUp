@@ -70,6 +70,8 @@ export const STR = {
     sxTapBlocks: "아래 단어를 순서대로 탭하세요", sxRightPos: (a, b) => `제자리 ${a}/${b}`, sxHintWrongAt: n => `${n}번째 단어부터 다시 보세요`,
     sxLastQ: "마지막 문제예요", sxRetryDone: "다시 풀기 끝!", sxUnitDone: "유닛 완료!", sxAnswered: "푼 문제",
     sxRetryMissed: n => `틀린 ${n}문제 다시`, sxAgain: "처음부터", sxWordOnToast: "단어 입력: 단어를 탭해서 문장을 만드세요", sxWordOffToast: "말하기 모드",
+    sxResumeAt: (a, n) => `이어서 ${a}/${n}`, sxSecDone: x => `${x} 끝!`, sxSecNext: x => `이제 ${x}`,
+    sxPartial: "중간 결과", sxLeftN: n => `${n}문제 남음`, sxDoLeft: n => `남은 ${n}문제 풀기`,
     sxQuit: "테스트 나가기", sxWordMode: "단어 입력", sxReset: "↺ 다시", sxCheck: "확인", sxJump: "문제로 이동",
   },
   en: {
@@ -139,6 +141,8 @@ export const STR = {
     sxTapBlocks: "Tap the words below in order", sxRightPos: (a, b) => `${a}/${b} in place`, sxHintWrongAt: n => `Check word ${n} again`,
     sxLastQ: "This is the last question", sxRetryDone: "Retry done!", sxUnitDone: "Unit complete!", sxAnswered: "Answered",
     sxRetryMissed: n => `Retry ${n} missed`, sxAgain: "From the start", sxWordOnToast: "Word blocks: tap the words to build the sentence", sxWordOffToast: "Speaking mode",
+    sxResumeAt: (a, n) => `Resume ${a}/${n}`, sxSecDone: x => `${x} done!`, sxSecNext: x => `Now: ${x}`,
+    sxPartial: "So far", sxLeftN: n => `${n} left`, sxDoLeft: n => `Answer the ${n} left`,
     sxQuit: "Leave the test", sxWordMode: "Word blocks", sxReset: "↺ Reset", sxCheck: "Check", sxJump: "Go to question",
   },
 };

@@ -431,3 +431,10 @@
   .gcell.g{background:var(--green-l);border-color:#9BE15D;color:var(--green-d)} .gcell.m{background:var(--orange-l);border-color:#FFC872;color:var(--orange-d)} .gcell.l{background:var(--red-l);border-color:#FFA3A3;color:var(--red-d)}
   .gcell.cur{outline:3px solid var(--blue);outline-offset:1px}
   ::view-transition-old(root),::view-transition-new(root){animation-duration:.22s}
+  /* v3.15: section change banner, partial result */
+  .secintro{align-self:flex-start;margin:-2px 0 12px;padding:7px 12px;border-radius:12px;background:linear-gradient(90deg,var(--green-l),#fff);border:2px solid #C4F29C;font-weight:800;font-size:13.5px;color:var(--green-d);animation:secin .5s cubic-bezier(.3,1.5,.5,1)}
+  .secintro b{color:var(--ink);margin-left:4px}
+  @keyframes secin{from{opacity:0;transform:translateY(-8px) scale(.95)}}
+  .fin-trophy.plain{animation:none}
+  .fin-title.partial{color:var(--blue-d)}
+  #stView .micgrp{display:flex;align-items:center;gap:10px}

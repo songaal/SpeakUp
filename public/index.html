@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3.14.0">
+<link rel="stylesheet" href="style.css?v=3.15.0">
 </head>
 <body class="v-lib">
 
@@ -137,7 +137,11 @@
       </div>
       <div class="row">
         <button class="nav" id="stPrev" data-i18n-aria="prevLine">‹</button>
-        <button class="mic" id="stMic" aria-label="말하기"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg></button>
+        <div class="micgrp">
+          <span class="keepsp" aria-hidden="true"></span>
+          <button class="mic" id="stMic" aria-label="말하기"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg></button>
+          <button class="keep" id="stKeep" aria-pressed="false" data-i18n="keep" data-i18n-title="keepTitle">유지</button>
+        </div>
         <button class="nav" id="stNext" data-i18n-aria="nextLine">›</button>
       </div>
     </div>
@@ -253,6 +257,6 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=3.14.0"></script>
+<script type="module" src="js/app.js?v=3.15.0"></script>
 </body>
 </html>
