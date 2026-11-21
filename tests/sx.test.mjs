@@ -68,19 +68,23 @@ test("step answers are prefixes of the main sentence found from the hints", () =
 
 test("unit questions: steps, variations with answers, step 2", () => {
   const qs = unitQuestions(parseChapter(SAMPLE).items[0]);
-  assert.deepEqual(qs.map(q => q.key), ["s1:0", "s1:1", "s1:2", "s1:3", "var:0", "var:1", "s2:0"]);
+  assert.deepEqual(qs.map(q => q.key), ["s1:0", "s1:1", "s1:2", "s1:3", "var:0", "var:1", "var:2", "s2:0"]);
+  assert.equal(qs[6].noAnswer, true); assert.equal(qs[4].noAnswer, false);
   assert.deepEqual(qs[1].parts, ["그녀는 항상 확인합니다", "그녀의 이메일을"]);
   assert.equal(qs[0].derived, true); assert.equal(qs[3].derived, false);
   assert.deepEqual(qs[4].hints, ["message"]);
   assert.deepEqual(qs[5].hints, ["the morning"]);
-  assert.equal(qs[6].en, "I work from home on Fridays.");
-  assert.equal(qs[6].raw, "I work from home on Fridays (= every Friday).");
-  assert.deepEqual(qs[6].chunks, ["나는 일합니다", "집으로부터", "금요일마다"]);
+  assert.equal(qs[7].en, "I work from home on Fridays.");
+  assert.equal(qs[7].raw, "I work from home on Fridays (= every Friday).");
+  assert.deepEqual(qs[7].chunks, ["나는 일합니다", "집으로부터", "금요일마다"]);
 });
 
-test("story questions skip prompts without an answer and only keep '...' templates", () => {
+test("prompts without an answer are kept as unscored questions; only '...' templates are shown", () => {
   const qs = storyQuestions(parseChapter(SAMPLE).items[3]);
-  assert.equal(qs.length, 2);
+  assert.equal(qs.length, 3); assert.equal(qs[2].noAnswer, true);
+  // other answer field names
+  const u = parseChapter({ units: [{ unit: "U", main_sentence_en: "Hi.", step1: { steps: [{ ko: "안녕", hint: "hi" }], variations: [{ prompt: "가", answer_en: "Go." }] }, step2: [{ ko: "나", en: "Me." }] }] }).items[0];
+  assert.deepEqual(unitQuestions(u).map(q => q.en), ["Hi.", "Go.", "Me."]);
   assert.equal(qs[0].template, "");
   assert.equal(qs[1].template, "People were walking their dogs, and ...");
 });

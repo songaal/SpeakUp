@@ -46,7 +46,7 @@ const level = () => nav.it != null ? "item" : nav.c ? "chapter" : nav.p ? "part"
 const byNo = (a, b) => (a.no - b.no) || (a.created - b.created);
 const bestKey = (cid, ii, q) => `${cid}|${ii}|${q.key}`;
 function itemStats(cid, ii, it) {
-  const qs = questionsOf(it), sc = qs.map(q => best[bestKey(cid, ii, q)]).filter(v => v != null);
+  const qs = questionsOf(it).filter(q => !q.noAnswer), sc = qs.map(q => best[bestKey(cid, ii, q)]).filter(v => v != null);
   return { total: qs.length, done: sc.length, avg: sc.length ? Math.round(sc.reduce((a, b) => a + b, 0) / sc.length) : null };
 }
 async function loadChapter(ch) {
@@ -160,6 +160,7 @@ const emptyHint = (ic, msg) => `<div class="sx-empty small"><div class="sx-empty
 const hintChips = hs => hs.length ? `<div class="hchips">${hs.map(h => `<span class="hchip">${esc(h)}</span>`).join("")}</div>` : "";
 const slashHTML = s => slashParts(s).map(esc).join(`<i class="sl">/</i>`);
 const chunkHTML = cs => cs.length ? `<div class="chunks">${cs.map(c => `<span>${esc(c)}</span>`).join(`<i>+</i>`)}</div>` : "";
+const noAnsTag = () => `<span class="noans">${t("sxNoAns")}</span>`;
 const bsHTML = v => `<span class="bs ${v === 100 ? "p" : ""}">${v != null ? v + "%" : ""}</span>`;
 function startButtons(cid, ii, n) {
   if (!n) return "";
@@ -179,10 +180,10 @@ function unitHTML(cid, ii, u) {
     <ul class="tl qtl">${u.steps.map((st, i) => `<li role="button" tabindex="0" data-q="${idxOf("s1:" + i)}"><span class="no">${i + 1}</span><div class="tx"><div class="te">${slashHTML(st.ko)}</div>${hintChips(hintList(st.hint))}</div>${bsHTML(b("s1:" + i))}</li>`).join("")}</ul>
     ${u.variations.length ? `<h3 class="sxh"><span class="sec var">${t("sxSecVarShort")}</span>${t("sxSecVar")}</h3>
     <ul class="tl qtl">${u.variations.map((v, i) => { const k = idxOf("var:" + i);
-      return `<li ${k >= 0 ? `role="button" tabindex="0" data-q="${k}"` : ""}><span class="no">${i + 1}</span><div class="tx"><div class="vtype">${esc(v.type)}</div><div class="te">${esc(v.ko)}</div>${chunkHTML(chunksOf(v.chunk))}${hintChips(v.wordHint ? [v.wordHint] : [])}</div>${bsHTML(b("var:" + i))}</li>`; }).join("")}</ul>` : ""}
+      return `<li ${k >= 0 ? `role="button" tabindex="0" data-q="${k}"` : ""}><span class="no">${i + 1}</span><div class="tx"><div class="vtype">${esc(v.type)}</div><div class="te">${esc(v.ko)}</div>${chunkHTML(chunksOf(v.chunk))}${hintChips(v.wordHint ? [v.wordHint] : [])}</div>${v.en ? bsHTML(b("var:" + i)) : noAnsTag()}</li>`; }).join("")}</ul>` : ""}
     ${u.s2.length ? `<h3 class="sxh"><span class="sec s2">STEP 2</span>${t("sxSecS2")}</h3>
     <ul class="tl qtl">${u.s2.map((x, i) => { const k = idxOf("s2:" + i);
-      return `<li ${k >= 0 ? `role="button" tabindex="0" data-q="${k}"` : ""}><span class="no">${esc(x.no)}</span><div class="tx"><div class="te">${esc(x.ko)}</div>${chunkHTML(chunksOf(x.chunk))}${hintChips(hintList(x.hint))}</div>${bsHTML(b("s2:" + i))}</li>`; }).join("")}</ul>` : ""}`;
+      return `<li ${k >= 0 ? `role="button" tabindex="0" data-q="${k}"` : ""}><span class="no">${esc(x.no)}</span><div class="tx"><div class="te">${esc(x.ko)}</div>${chunkHTML(chunksOf(x.chunk))}${hintChips(hintList(x.hint))}</div>${x.en ? bsHTML(b("s2:" + i)) : noAnsTag()}</li>`; }).join("")}</ul>` : ""}`;
 }
 function tipsHTML(it) {
   const pt = p => { const m = p.match(/^예\s*[:：]\s*(.+)$/) || p.match(/^(?:e\.g\.|ex)\s*[:：]?\s*(.+)$/i);
@@ -196,7 +197,7 @@ function storyHTML(cid, ii, st) {
   return `<div class="tiphero story"><span class="ubadge story">📖 LET'S WRITE A STORY</span><div class="tiphero-t">${esc(st.title)}</div></div>
     ${startButtons(cid, ii, qs.length)}
     <ul class="tl qtl">${st.prompts.map((p, i) => { const k = qs.findIndex(q => q.key === "st:" + i);
-      return `<li ${k >= 0 ? `role="button" tabindex="0" data-q="${k}"` : `class="noq"`}><span class="no">${i + 1}</span><div class="tx"><div class="te">${esc(p.ko)}</div>${/\.\.\.|…/.test(p.template) ? `<div class="tpl">${esc(p.template)}</div>` : ""}${hintChips(hintList(p.hint))}</div>${bsHTML(k >= 0 ? best[`${cid}|${ii}|st:${i}`] : null)}</li>`; }).join("")}</ul>`;
+      return `<li ${k >= 0 ? `role="button" tabindex="0" data-q="${k}"` : `class="noq"`}><span class="no">${i + 1}</span><div class="tx"><div class="te">${esc(p.ko)}</div>${/\.\.\.|…/.test(p.template) ? `<div class="tpl">${esc(p.template)}</div>` : ""}${hintChips(hintList(p.hint))}</div>${p.en ? bsHTML(best[`${cid}|${ii}|st:${i}`]) : noAnsTag()}</li>`; }).join("")}</ul>`;
 }
 
 /* ---- create / edit sheets ---- */
@@ -361,10 +362,11 @@ function paintMode() {
   $("stWordTg").setAttribute("aria-checked", wordMode); $("stWordTg").classList.toggle("on", wordMode);
   $("stAutoBtn").classList.toggle("on", autoNext);
 }
+const scoreCls = r => !r ? "" : r.score == null ? "f" : r.score === 100 ? "g" : r.score >= 50 ? "m" : "l";
 function paintProg() {
   $("stCount").textContent = `${S.pos + 1}/${S.order.length}`;
   $("stProg").innerHTML = S.order.map((qi, k) => { const r = S.res[qi];
-    return `<i class="${r ? (r.score === 100 ? "g" : r.score >= 50 ? "m" : "l") : ""}${k === S.pos ? " cur" : ""}"></i>`; }).join("");
+    return `<i class="${scoreCls(r)}${k === S.pos ? " cur" : ""}"></i>`; }).join("");
 }
 
 function renderQ(dir) {
@@ -375,7 +377,7 @@ function renderQ(dir) {
   const prev = S.pos > 0 ? S.qs[S.order[S.pos - 1]] : null;
   const intro = dir > 0 && prev && prev.sec !== q.sec ? `<div class="secintro">🎉 ${t("sxSecDone", secName(prev.sec))} <b>${t("sxSecNext", secName(q.sec))}</b></div>` : "";
   const card = `<div class="qcard ${dir > 0 ? "in-r" : dir < 0 ? "in-l" : "in"}">${intro}
-      <div class="qtop"><span class="sec ${q.sec}">${esc(secLabel(q))}</span>${q.derived ? `<span class="qnote">${t("sxBuildUp")}</span>` : ""}${bsHTML(best[bestKey(S.cid, S.ii, q)])}</div>
+      <div class="qtop"><span class="sec ${q.sec}">${esc(secLabel(q))}</span>${q.derived ? `<span class="qnote">${t("sxBuildUp")}</span>` : ""}${q.noAnswer ? `<span class="qnote">${t("sxFreeSpeak")}</span>` : ""}${bsHTML(best[bestKey(S.cid, S.ii, q)])}</div>
       <div class="qko">${q.parts.length > 1 ? q.parts.map((p, i) => `<span class="${i === q.parts.length - 1 ? "new" : ""}">${esc(p)}</span>`).join(`<i class="sl">/</i>`) : esc(q.ko)}</div>
       ${chunkHTML(q.chunks)}
       ${q.hints.length ? `<div class="hchips">${q.hints.map(h => `<span class="hchip">🔑 ${esc(h)}</span>`).join("")}</div>` : ""}
@@ -392,6 +394,7 @@ const secName = sec => sec === "s1" ? `STEP 1 · ${t("sxSecSteps")}` : sec === "
 function paintResultPill(r) {
   const el = $("stResPill");
   if (!r) { el.className = "result"; return; }
+  if (r.score == null) { el.innerHTML = `<span>🗣 ${t("sxFreeDone")}</span>`; el.className = "result show free"; return; }
   const [cls, title] = r.score === 100 ? ["good", "Perfect! 🎉"] : r.score >= 80 ? ["good", "Great!"] : r.score >= 50 ? ["mid", "Good try!"] : ["low", "One more time!"];
   el.innerHTML = `<span class="score">${r.score}%</span><span>${title} <span class="sub">${esc(r.sub || "")}</span></span>`;
   el.className = "result show " + cls;
@@ -401,6 +404,11 @@ function paintResultPill(r) {
 function paintAnswer() {
   const q = qOf(), qi = qiOf(), el = $("stAns"); if (!el) return;
   if (wordMode) { paintBlocks(); return; }
+  if (q.noAnswer) {
+    const r = S.res[qi];
+    el.innerHTML = `<div class="freebox">${t("sxNoAnsHelp")}</div><div class="heard" id="stHeard">${r && r.said ? `<span class="label">${t("youSaid")}</span>${esc(r.said)}` : `<span class="ph">${speechEngine() ? t("sxSayIt") : t("errUnsupported")}</span>`}</div>`;
+    return;
+  }
   const r = S.res[qi], att = r && r.kind === "speak" ? r : null, ref = refOf(q);
   const slot = (w, k) => {
     let st = att ? att.st[k] : (liveSt && liveSt[k] === "live") || (!att && filled.has(k) && rec.listening) ? "live" : "";
@@ -420,6 +428,14 @@ function live({ finalText, interim, parts }) {
   if (!S || wordMode) return;
   const q = qOf(), qi = qiOf(), full = (finalText + " " + interim).trim();
   if (full && S.res[qi] && S.res[qi].kind === "speak") { delete S.res[qi]; paintResultPill(null); }
+  if (q.noAnswer) {
+    if (full && S.res[qi]) { delete S.res[qi]; paintResultPill(null); paintAnswer(); }
+    const h = $("stHeard");
+    if (h) h.innerHTML = full ? `<span class="label">LISTENING…</span>${esc(finalText)} <span class="interim">${esc(interim)}</span>` : `<span class="label">${t("listening")}</span><span class="ph">${t("listeningPh")}</span>`;
+    $("stDone").disabled = !full;
+    clearTimeout(silenceT); if (full) silenceT = setTimeout(capDone, 30000);
+    return;
+  }
   const ref = refOf(q);
   if (full) fillWords(ref, [full, ...parts, interim]).forEach(k => filled.add(k));
   liveSt = ref.words.map((_, k) => filled.has(k) ? "live" : "");
@@ -446,6 +462,7 @@ function capDone() {
 function evaluate(said, parts, interim) {
   const q = qOf(), qi = qiOf(); liveSt = null;
   if (!said) { paintAnswer(); const h = $("stHeard"); if (h) h.innerHTML = `<span class="ph">${t("nothingHeard")}</span>`; return; }
+  if (q.noAnswer) { record(q, qi, { kind: "free", score: null, said }); paintAnswer(); return; }
   const r = scoreAttempt(q.en, said, [...parts, interim], [...filled]);
   keep[qi] = new Set(r.st.map((s, k) => s === "ok" ? k : -1).filter(k => k >= 0));
   const parts2 = [t("blanks", r.ok, r.total)]; if (r.bad) parts2.push(t("wrongN", r.bad)); if (r.miss) parts2.push(t("missedN", r.miss));
@@ -455,6 +472,7 @@ function evaluate(said, parts, interim) {
 }
 function record(q, qi, res) {
   S.res[qi] = res;
+  if (res.score == null) { paintResultPill(res); paintProg(); saveSess(); haptic(15); return; }   // free speaking: nothing to score
   const k = bestKey(S.cid, S.ii, q); if (best[k] == null || res.score > best[k]) { best[k] = res.score; ls.set(K.best, best); }
   paintResultPill(res); paintProg();
   if (res.score === 100) { chime(); haptic(20); } else if (res.kind === "word") { thud(); haptic([10, 40, 10]); }
@@ -474,7 +492,9 @@ function wstate(qi) {
   return W[qi];
 }
 function paintBlocks() {
-  const q = qOf(), qi = qiOf(), s = wstate(qi), el = $("stAns");
+  const q = qOf(), qi = qiOf(), el = $("stAns");
+  if (q.noAnswer) { el.innerHTML = `<div class="freebox">${t("sxNoAnsWord")}</div>`; $("stCheck").disabled = true; $("stCheck").classList.remove("next"); return; }
+  const s = wstate(qi);
   const used = new Set(s.placed), res = s.checked ? s.result : null;
   const trayBlocks = s.placed.map((p, i) => {
     const b = s.blocks[p], ok = res ? res.ok[i] : null, want = res && !ok ? s.words[i] : "";
@@ -492,7 +512,7 @@ function placeBlock(i) {
   unlockAudio(); const s = wstate(qiOf()); if (s.checked || s.placed.includes(i)) return;
   s.placed.push(i); s.glow = -1; tick(); haptic(8);
   if (s.placed.length === s.blocks.length) { paintBlocks(); setTimeout(checkWord, 220); return; }   // last block → check by itself
-  paintBlocks(); const tray = $("stTray"); if (tray && tray.lastElementChild) tray.lastElementChild.classList.add("pop");
+  paintBlocks(); const tray = $("stTray"); if (tray && tray.lastElementChild) tray.lastElementChild.classList.add("landed");
 }
 function unplace(k) { const s = wstate(qiOf()); if (s.checked) return; s.placed.splice(k, 1); tick(); paintBlocks(); }
 function checkWord() {
@@ -507,6 +527,7 @@ function resetWord() {
   paintBlocks();
 }
 function wordHint() {
+  if (qOf().noAnswer) return;
   const s = wstate(qiOf()); if (s.checked) return;
   const h = nextBlockHint(s.answerKeys, s.placed.map(p => s.blocks[p].key));
   if (h.wrongAt >= 0) { const b = $("stTray").children[h.wrongAt]; if (b) { b.classList.remove("shake"); void b.offsetWidth; b.classList.add("shake"); } C.toast(t("sxHintWrongAt", h.wrongAt + 1)); return; }
@@ -546,22 +567,24 @@ function jump(k) { leaveQ(); const d = k - S.pos; S.pos = k; renderQ(Math.sign(d
 function showResult() {
   stopTest(true); resultShown = true;
   const done = S.order.map(qi => S.res[qi]).filter(Boolean), n = S.order.length;
-  const avg = done.length ? Math.round(done.reduce((a, r) => a + r.score, 0) / done.length) : 0;
-  const perfect = done.filter(r => r.score === 100).length, secs = Math.round((Date.now() - S.start) / 1000);
-  const misses = S.order.filter(qi => !S.res[qi] || S.res[qi].score < 100);
+  const scored = done.filter(r => r.score != null), nScored = S.order.filter(qi => !S.qs[qi].noAnswer).length;
+  const avg = scored.length ? Math.round(scored.reduce((a, r) => a + r.score, 0) / scored.length) : 0;
+  const perfect = scored.filter(r => r.score === 100).length, secs = Math.round((Date.now() - S.start) / 1000);
+  const misses = S.order.filter(qi => !S.qs[qi].noAnswer && (!S.res[qi] || S.res[qi].score < 100));
   const left = S.order.filter(qi => !S.res[qi]), complete = !left.length;
   if (complete && S.round === 1) { delete sess[`${S.cid}|${S.ii}`]; ls.set(K.sess, sess); }   // unit done through STEP 2 → next 테스트 starts fresh
   const secs2 = ["s1", "var", "s2", "story"].map(sec => { const qis = S.order.filter(qi => S.qs[qi].sec === sec); if (!qis.length) return "";
-    const sc = qis.map(qi => S.res[qi] ? S.res[qi].score : 0), a = Math.round(sc.reduce((x, y) => x + y, 0) / qis.length);
+    const sq = qis.filter(qi => !S.qs[qi].noAnswer); if (!sq.length) return "";
+    const sc = sq.map(qi => S.res[qi] && S.res[qi].score != null ? S.res[qi].score : 0), a = Math.round(sc.reduce((x, y) => x + y, 0) / sq.length);
     return `<div class="rsec"><span class="sec ${sec}">${sec === "var" ? t("sxSecVarShort") : SEC[sec]}</span><i><b style="width:${a}%"></b></i><span>${a}%</span></div>`; }).join("");
   const [icon, head] = !complete ? ["📝", t("sxPartial")] : S.round > 1 ? ["🔁", t("sxRetryDone")] : ["🏆", t("sxUnitDone")];
   $("stResBody").innerHTML = `<div class="fin-trophy ${complete ? "" : "plain"}">${icon}</div>
     <h1 class="fin-title ${complete ? "" : "partial"}">${head}</h1><div class="fin-dlg">${esc($("stTitle").textContent)}${complete ? "" : ` · ${t("sxLeftN", left.length)}`}</div>
     <div class="fin-score">${avg}%</div><div class="fin-score-l">${t("finAvg")}</div>
-    <div class="fin-stats"><div><b>${perfect}/${n}</b><span>${t("finPerfect")}</span></div><div><b>${done.length}/${n}</b><span>${t("sxAnswered")}</span></div><div><b>${t("minSec", Math.floor(secs / 60), secs % 60)}</b><span>${t("finTime")}</span></div></div>
+    <div class="fin-stats"><div><b>${perfect}/${nScored}</b><span>${t("finPerfect")}</span></div><div><b>${done.length}/${n}</b><span>${t("sxAnswered")}</span></div><div><b>${t("minSec", Math.floor(secs / 60), secs % 60)}</b><span>${t("finTime")}</span></div></div>
     <div class="rsecs">${secs2}</div>
     <ul class="rlist">${S.order.map((qi, k) => { const q = S.qs[qi], r = S.res[qi];
-      return `<li data-k="${k}"><span class="sec ${q.sec}">${esc(secLabel(q))}</span><div class="rq"><div class="rko">${esc(q.ko)}</div><div class="ren">${esc(q.raw)}</div></div>${r ? `<span class="badge ${r.score >= 80 ? "g" : r.score >= 50 ? "m" : "l"}">${r.score}%</span>` : `<span class="badge">–</span>`}</li>`; }).join("")}</ul>
+      return `<li data-k="${k}"><span class="sec ${q.sec}">${esc(secLabel(q))}</span><div class="rq"><div class="rko">${esc(q.ko)}</div><div class="ren">${esc(q.raw || (r && r.said) || "")}</div></div>${r && r.score == null ? `<span class="badge f">🗣</span>` : r ? `<span class="badge ${r.score >= 80 ? "g" : r.score >= 50 ? "m" : "l"}">${r.score}%</span>` : `<span class="badge">–</span>`}</li>`; }).join("")}</ul>
     <div class="rbtns">${!complete ? `<button class="btn pri" id="stLeft">▶ ${t("sxDoLeft", left.length)}</button>`
         : misses.length ? `<button class="btn pri" id="stRetry">↻ ${t("sxRetryMissed", misses.length)}</button>` : ""}
       <button class="btn sec" id="stAgain">${t("sxAgain")}</button><button class="btn ${complete && !misses.length ? "pri" : "sec"}" id="stFinDone">${t("finDone")}</button></div>`;
@@ -575,7 +598,7 @@ function showResult() {
 }
 function openGrid() {
   $("stGridBody").innerHTML = S.order.map((qi, k) => { const r = S.res[qi], q = S.qs[qi];
-    return `<button class="gcell ${r ? (r.score === 100 ? "g" : r.score >= 50 ? "m" : "l") : ""} ${k === S.pos ? "cur" : ""} ${q.sec}" data-k="${k}">${k + 1}</button>`; }).join("");
+    return `<button class="gcell ${scoreCls(r)} ${k === S.pos ? "cur" : ""} ${q.sec}" data-k="${k}">${k + 1}</button>`; }).join("");
   $("stGridBody").querySelectorAll("[data-k]").forEach(b => b.onclick = () => { $("stGrid").classList.remove("show"); jump(+b.dataset.k); });
   $("stGrid").classList.add("show");
 }
@@ -613,10 +636,10 @@ export function initSx(ctx) {
   };
   $("stKeep").onclick = () => { keepOn = !keepOn; ls.set(K.keep, keepOn); paintMic(); if (rec.listening) $("stDone").disabled = !(cur.finalText + cur.interim).trim(); C.toast(keepOn ? t("keepOnToast") : t("keepOffToast")); };
   $("stDone").onclick = () => { unlockAudio(); capDone(); };
-  $("stHint").onclick = () => { if (wordMode) { wordHint(); return; } hintLv = (hintLv + 1) % 3; updateHint(); paintAnswer(); };
-  [$("stPlay"), $("stPlayW")].forEach(b => b.onclick = () => { if (rec.listening) rec.stop(true); say(qOf().en); });
+  $("stHint").onclick = () => { if (wordMode) { wordHint(); return; } if (qOf().noAnswer) return; hintLv = (hintLv + 1) % 3; updateHint(); paintAnswer(); };
+  [$("stPlay"), $("stPlayW")].forEach(b => b.onclick = () => { if (qOf().noAnswer) { C.toast(t("sxNoAnsListen")); return; } if (rec.listening) rec.stop(true); say(qOf().en); });
   $("stAutoBtn").onclick = () => { autoNext = !autoNext; ls.set(K.auto, autoNext); paintMode(); };
-  $("stReset").onclick = resetWord; $("stHintW").onclick = wordHint;
+  $("stReset").onclick = () => { if (!qOf().noAnswer) resetWord(); }; $("stHintW").onclick = wordHint;
   $("stCheck").onclick = () => { unlockAudio(); const s = wstate(qiOf()); if (s.checked) nextQ(); else checkWord(); };
   ["stPrev", "stPrevW"].forEach(id => $(id).onclick = prevQ);
   ["stNext", "stNextW"].forEach(id => $(id).onclick = () => { unlockAudio(); nextQ(); });

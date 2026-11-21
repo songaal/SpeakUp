@@ -72,6 +72,9 @@ export const STR = {
     sxRetryMissed: n => `틀린 ${n}문제 다시`, sxAgain: "처음부터", sxWordOnToast: "단어 입력: 단어를 탭해서 문장을 만드세요", sxWordOffToast: "말하기 모드",
     sxResumeAt: (a, n) => `이어서 ${a}/${n}`, sxSecDone: x => `${x} 끝!`, sxSecNext: x => `이제 ${x}`,
     sxPartial: "중간 결과", sxLeftN: n => `${n}문제 남음`, sxDoLeft: n => `남은 ${n}문제 풀기`,
+    sxNoAns: "정답 없음", sxFreeSpeak: "정답 없이 말하기", sxFreeDone: "말한 내용을 기록했어요",
+    sxNoAnsHelp: "이 문제는 파일에 영어 정답이 없어요. 자유롭게 말해 보세요 — 점수 없이 말한 내용만 남아요.",
+    sxNoAnsWord: "이 문제는 파일에 영어 정답이 없어서 단어 입력을 할 수 없어요. 단어 입력을 끄고 말하기로 연습하세요.", sxNoAnsListen: "이 문제는 정답 문장이 없어요",
     sxQuit: "테스트 나가기", sxWordMode: "단어 입력", sxReset: "↺ 다시", sxCheck: "확인", sxJump: "문제로 이동",
   },
   en: {
@@ -143,6 +146,9 @@ export const STR = {
     sxRetryMissed: n => `Retry ${n} missed`, sxAgain: "From the start", sxWordOnToast: "Word blocks: tap the words to build the sentence", sxWordOffToast: "Speaking mode",
     sxResumeAt: (a, n) => `Resume ${a}/${n}`, sxSecDone: x => `${x} done!`, sxSecNext: x => `Now: ${x}`,
     sxPartial: "So far", sxLeftN: n => `${n} left`, sxDoLeft: n => `Answer the ${n} left`,
+    sxNoAns: "no answer", sxFreeSpeak: "free speaking", sxFreeDone: "Saved what you said",
+    sxNoAnsHelp: "The file has no English answer for this one. Say it your way — it isn't scored, only what you said is kept.",
+    sxNoAnsWord: "The file has no English answer for this one, so word blocks can't be used. Turn word blocks off and say it.", sxNoAnsListen: "No answer sentence for this one",
     sxQuit: "Leave the test", sxWordMode: "Word blocks", sxReset: "↺ Reset", sxCheck: "Check", sxJump: "Go to question",
   },
 };

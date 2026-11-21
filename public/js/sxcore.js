@@ -7,6 +7,8 @@
 //                          {type:"LET'S WRITE A STORY", title, prompts:[{ko,hint,en_template?,answer}]} ] }
 
 const str = v => (v == null ? "" : String(v)).trim();
+// the English answer may come under several names depending on how the file was made
+const ansOf = o => str(o.answer ?? o.answer_en ?? o.en ?? o.english ?? o.model_answer ?? o.sample_answer ?? o.example);
 const splitBy = (s, re) => str(s).split(re).map(x => x.trim()).filter(Boolean);
 export const chunksOf = s => splitBy(s, /\s+\+\s+|\s*\+\s*/);           // "A + B + C" → [A, B, C]
 export const slashParts = s => splitBy(s, /\s+\/\s+/);                   // "A / B" → [A, B]
@@ -33,10 +35,10 @@ export function parseChapter(input) {
         focus: str(u.grammar_focus), ko: str(u.main_sentence_ko), en: str(u.main_sentence_en), core: str(u.core_structure),
         steps: (s1.steps || []).map(s => ({ ko: str(s.ko), hint: str(s.hint) })).filter(s => s.ko),
         variations: (s1.variations || []).map(v => ({
-          type: str(v.type), ko: str(v.prompt || v.ko), chunk: str(v.hint), wordHint: str(v.word_hint), en: str(v.answer),
+          type: str(v.type), ko: str(v.prompt || v.ko), chunk: str(v.hint), wordHint: str(v.word_hint), en: ansOf(v),
           steps: (v.steps || []).map(s => ({ ko: str(s.ko), hint: str(s.hint) })).filter(s => s.ko),
         })).filter(v => v.ko),
-        s2: (Array.isArray(u.step2) ? u.step2 : []).map((s, i) => ({ no: s.no ?? i + 1, ko: str(s.ko), chunk: str(s.chunk_ko), hint: str(s.hint), en: str(s.answer) })).filter(s => s.ko),
+        s2: (Array.isArray(u.step2) ? u.step2 : []).map((s, i) => ({ no: s.no ?? i + 1, ko: str(s.ko), chunk: str(s.chunk_ko), hint: str(s.hint), en: ansOf(s) })).filter(s => s.ko),
       });
     } else if (/TIP/.test(type)) {
       items.push({
@@ -47,7 +49,7 @@ export function parseChapter(input) {
     } else if (/STORY/.test(type) || Array.isArray(u.prompts)) {
       items.push({
         kind: "story", title: str(u.title || u.type),
-        prompts: (u.prompts || []).map(p => ({ ko: str(p.ko), hint: str(p.hint), template: str(p.en_template), en: str(p.answer) })).filter(p => p.ko),
+        prompts: (u.prompts || []).map(p => ({ ko: str(p.ko), hint: str(p.hint), template: str(p.en_template), en: ansOf(p) })).filter(p => p.ko),
       });
     }
   });
@@ -102,7 +104,8 @@ export function stepAnswers(sentence, hints) {
 
 /* ---------------- questions of a unit / story ----------------
  * q: {key, sec:"s1"|"var"|"s2"|"story", n, of, type, ko, parts[] (slash chunks of ko), chunks[] (the "A + B" guide),
- *     hints[], wordHint, template, en (answer, cleaned), raw (answer as written), derived (en built from the main sentence)} */
+ *     hints[], wordHint, template, en (answer, cleaned), raw (answer as written), derived (en built from the main sentence),
+ *     noAnswer (the file has no English for it: still asked — spoken freely, not scored)} */
 export function unitQuestions(u) {
   const qs = [];
   const ans = stepAnswers(u.en, u.steps.map(s => s.hint));
@@ -110,22 +113,22 @@ export function unitQuestions(u) {
     key: `s1:${i}`, sec: "s1", n: i + 1, of: u.steps.length, ko: s.ko, parts: slashParts(s.ko), chunks: [], hints: hintList(s.hint),
     en: cleanAnswer(ans[i] || u.en), raw: ans[i] || u.en, derived: i < u.steps.length - 1,
   }));
-  u.variations.forEach((v, i) => { if (!v.en) return; qs.push({
+  u.variations.forEach((v, i) => { qs.push({
     key: `var:${i}`, sec: "var", n: i + 1, of: u.variations.length, type: v.type, ko: v.ko, parts: [], chunks: chunksOf(v.chunk),
     hints: [...(v.wordHint ? [v.wordHint] : []), ...v.steps.flatMap(s => hintList(s.hint))].filter((h, j, a) => a.indexOf(h) === j),
-    en: cleanAnswer(v.en), raw: v.en,
+    en: cleanAnswer(v.en), raw: v.en, noAnswer: !v.en,
   }); });
-  u.s2.forEach((s, i) => { if (!s.en) return; qs.push({
+  u.s2.forEach((s, i) => { qs.push({
     key: `s2:${i}`, sec: "s2", n: i + 1, of: u.s2.length, no: s.no, ko: s.ko, parts: [], chunks: chunksOf(s.chunk), hints: hintList(s.hint),
-    en: cleanAnswer(s.en), raw: s.en,
+    en: cleanAnswer(s.en), raw: s.en, noAnswer: !s.en,
   }); });
   return qs;
 }
 export function storyQuestions(st) {
-  const ps = st.prompts.filter(p => p.en);
+  const ps = st.prompts;
   return ps.map((p, i) => ({
     key: `st:${st.prompts.indexOf(p)}`, sec: "story", n: i + 1, of: ps.length, ko: p.ko, parts: [], chunks: [], hints: hintList(p.hint),
-    template: /\.\.\.|…/.test(p.template) ? p.template : "", en: cleanAnswer(p.en), raw: p.en,
+    template: /\.\.\.|…/.test(p.template) ? p.template : "", en: cleanAnswer(p.en), raw: p.en, noAnswer: !p.en,
   }));
 }
 export const questionsOf = it => it.kind === "unit" ? unitQuestions(it) : it.kind === "story" ? storyQuestions(it) : [];

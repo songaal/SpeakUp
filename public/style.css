@@ -438,3 +438,11 @@
   .fin-trophy.plain{animation:none}
   .fin-title.partial{color:var(--blue-d)}
   #stView .micgrp{display:flex;align-items:center;gap:10px}
+  /* v3.15.1 */
+  .blk.landed{animation:blkpop .25s cubic-bezier(.3,1.6,.5,1)}
+  .noans{flex:none;font-size:11px;font-weight:900;color:var(--faint);background:var(--soft);border-radius:99px;padding:2px 8px;align-self:flex-start;margin-top:2px}
+  .freebox{font-weight:700;font-size:14px;line-height:1.55;color:var(--muted);background:var(--soft);border-radius:14px;padding:10px 12px}
+  .segbar i.f,.gcell.f{background:#C7D7F5}
+  .gcell.f{border-color:#A9BFEA;color:#4A6AB0}
+  .result.free{background:#E6EEFC;color:#4A6AB0}
+  .badge.f{background:#E6EEFC}
