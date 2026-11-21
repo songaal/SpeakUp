@@ -2,7 +2,10 @@
 import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, fillWords, scoreAttempt, dialogStats } from "./core.js";
 import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT, CONVERT_PROMPT_EN } from "./content.js";
 import { t, lang, setLang, langChoice, setLangChoice, resolveLang, applyStatic, QUOTES } from "./i18n.js";
-const VERSION = "3.13.0";
+import { unlockAudio, chime, fanfare, startConfetti as confettiOn, stopConfetti as confettiOff } from "./fx.js";
+import { hub } from "./speech.js";
+import { initSx, sxApplyLang, renderTrainings, newTraining } from "./sx.js";
+const VERSION = "3.14.0";
 const promptText = () => lang() === "en" ? CONVERT_PROMPT_EN : CONVERT_PROMPT;
 
 /* ================= store (localStorage) ================= */
@@ -58,8 +61,7 @@ function ask(text, yes = t("del")) {
 let view = "lib";
 function showView(v) {
   view = v;
-  ["lib", "info", "play"].forEach(n => $(n + "View").classList.toggle("on", n === v));
-  document.body.className = "v-" + v;
+  ["lib", "info", "play", "sx", "st"].forEach(n => { $(n + "View").classList.toggle("on", n === v); document.body.classList.toggle("v-" + n, n === v); });
 }
 let dlg = null;   // the dialogue open in info/player
 
@@ -67,6 +69,9 @@ let dlg = null;   // the dialogue open in info/player
 let editing = false; const selected = new Set();
 function renderLib() {
   showStoreWarn();
+  const sxOn = document.body.dataset.mode === "sx";
+  $("dlist").style.display = sxOn ? "none" : ""; $("sxList").style.display = sxOn ? "" : "none";
+  if (sxOn) { if (editing) { editing = false; selected.clear(); } $("libView").classList.remove("editing"); setFab(false); renderTrainings($("sxList")); return; }
   $("libView").classList.toggle("editing", editing);
   $("editModeBtn").textContent = editing ? t("done") : t("edit"); $("editModeBtn").classList.toggle("on", editing);
   const el = $("dlist");
@@ -99,7 +104,7 @@ $("dlist").addEventListener("click", e => {
 $("editModeBtn").onclick = () => { editing = !editing; selected.clear(); setFab(false); renderLib(); };
 // floating ＋: tap → 새 대화 / 가져오기 pop up above it; outside tap closes
 function setFab(open) { $("fab").classList.toggle("open", open); $("fabBtn").setAttribute("aria-expanded", open); }
-$("fabBtn").onclick = () => setFab(!$("fab").classList.contains("open"));
+$("fabBtn").onclick = () => { if (document.body.dataset.mode === "sx") { newTraining(); return; } setFab(!$("fab").classList.contains("open")); };
 document.addEventListener("pointerdown", e => { if (!e.target.closest("#fab")) setFab(false); });
 $("selAllBtn").onclick = () => { if (selected.size === lib.length) selected.clear(); else lib.forEach(d => selected.add(d.id)); renderLib(); };
 $("delSelBtn").onclick = async () => {
@@ -365,22 +370,6 @@ function evaluate() {
     const at = idx; autoTimer = setTimeout(() => { if (view === "play" && idx === at) showFinish(); }, 1300);
   }
 }
-/* ---- success chime: a short rising two-note tone synthesized with Web Audio (no audio file) on a 100% sentence.
- * The AudioContext is created/resumed on the mic tap (a user gesture) so iOS lets it play later. */
-let actx = null;
-function unlockAudio() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch (e) {} }
-function chime() {
-  if (!actx) return;
-  try {
-    const t0 = actx.currentTime + 0.01;
-    [[784, 0], [1175, 0.11]].forEach(([f, dt]) => {               // G5 → D6
-      const o = actx.createOscillator(), g = actx.createGain();
-      o.type = "sine"; o.frequency.value = f;
-      g.gain.setValueAtTime(0, t0 + dt); g.gain.linearRampToValueAtTime(0.25, t0 + dt + 0.015); g.gain.exponentialRampToValueAtTime(0.001, t0 + dt + 0.32);
-      o.connect(g).connect(actx.destination); o.start(t0 + dt); o.stop(t0 + dt + 0.35);
-    });
-  } catch (e) {}
-}
 function setMicUI(on) { micEl.classList.toggle("rec", on); micEl.title = on ? (keepOn ? t("micKeep") : t("micTalk")) : t("micIdle"); updateDone(); micEl.setAttribute("aria-label", micEl.title); }
 function showErr(m) { errEl.textContent = m; errEl.className = "err show"; }
 function finish() {
@@ -480,10 +469,10 @@ function setEngine(n) {
     let d = null; try { d = await window.claude.use("dictation"); } catch (e) {}
     micEl.disabled = false;
     if (d) {
-      dictation = d;
-      d.onPartial(({ text }) => { if (!listening || gated || skipNextFinal) return; interimText = text || ""; showLive(); armSilence(); });
-      d.onFinal(({ text }) => { if (!listening) return; if (skipNextFinal || gated) { skipNextFinal = false; return; } finalText = (finalText + " " + (text || "")).trim(); if (text) finalParts.push(text); interimText = ""; showLive(); armSilence(); });
-      d.onState(({ state }) => { if (state === "idle" && !finished) finish(); });
+      dictation = d; hub.dictation = d;   // 문장만들기 borrows it: while hub.owner is set, events go there
+      d.onPartial(({ text }) => { if (hub.owner) { hub.owner.partial(text); return; } if (!listening || gated || skipNextFinal) return; interimText = text || ""; showLive(); armSilence(); });
+      d.onFinal(({ text }) => { if (hub.owner) { hub.owner.final(text); return; } if (!listening) return; if (skipNextFinal || gated) { skipNextFinal = false; return; } finalText = (finalText + " " + (text || "")).trim(); if (text) finalParts.push(text); interimText = ""; showLive(); armSilence(); });
+      d.onState(({ state }) => { if (hub.owner) { hub.owner.state(state); return; } if (state === "idle" && !finished) finish(); });
       setEngine("dictation"); return;
     }
   }
@@ -503,6 +492,7 @@ $("autoBtn").onclick = () => { autoNext = !autoNext; ls.set(K.auto, autoNext); u
 $("doneBtn").onclick = () => { unlockAudio(); if (listening) sentenceDone(); };
 document.addEventListener("keydown", e => {
   if (/TEXTAREA|INPUT/.test(e.target.tagName) || document.querySelector(".overlay.show,.modal.show")) return;
+  if (view === "sx" || view === "st") return;                     // 문장만들기 has its own keys (sx.js)
   if (e.key === "Escape") { setPrompt(false); if (view === "play") $("backBtn").click(); else if (view === "info") goLibrary(); return; }
   if (view !== "play") return;
   if (e.code === "Space") { e.preventDefault(); micEl.click(); }
@@ -515,7 +505,6 @@ document.addEventListener("keydown", e => {
 window.addEventListener("resize", () => { if (view === "play") centerCurrent(false); });
 
 /* ================= FINISH SCREEN: score, confetti, fanfare, a perseverance quote ================= */
-let confettiRAF = 0;
 function showFinish() {
   const done = Object.values(attempts), n = lines.length;
   const avg = done.length ? Math.round(done.reduce((a, x) => a + x.score, 0) / done.length) : 0;
@@ -527,48 +516,9 @@ function showFinish() {
   const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
   $("finQuote").innerHTML = `<p class="q-en">“${esc(q.en)}”</p>` + (lang() === "ko" ? `<p class="q-ko">${esc(q.ko)}</p><cite>— ${esc(q.by)} (${esc(q.byKo)})</cite>` : `<cite>— ${esc(q.by)}</cite>`);
   $("finish").classList.add("show");
-  fanfare(); startConfetti();
+  fanfare(); confettiOn($("confetti"));
 }
-$("finDone").onclick = () => { $("finish").classList.remove("show"); stopConfetti(); goLibrary(); };
-function fanfare() {                                // "빰빠밤~": rising arpeggio into a held major chord (synthesized)
-  unlockAudio(); if (!actx) return;
-  try {
-    const t0 = actx.currentTime + 0.05;
-    const notes = [[392, 0, 0.13], [523, 0.15, 0.13], [659, 0.3, 0.13], [784, 0.45, 0.9], [523, 0.45, 0.9], [659, 0.45, 0.9]];
-    notes.forEach(([f, dt, len]) => {
-      const o = actx.createOscillator(), g = actx.createGain();
-      o.type = "triangle"; o.frequency.value = f;
-      g.gain.setValueAtTime(0, t0 + dt); g.gain.linearRampToValueAtTime(0.18, t0 + dt + 0.02); g.gain.setValueAtTime(0.18, t0 + dt + len * 0.6);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + dt + len);
-      o.connect(g).connect(actx.destination); o.start(t0 + dt); o.stop(t0 + dt + len + 0.05);
-    });
-  } catch (e) {}
-}
-function startConfetti() {
-  const cv = $("confetti"), ctx = cv.getContext("2d"), dpr = window.devicePixelRatio || 1;
-  const W = cv.width = innerWidth * dpr, H = cv.height = innerHeight * dpr;
-  const colors = ["#58CC02", "#1CB0F6", "#FF9600", "#FF4B4B", "#CE82FF", "#FFC800"];
-  const ps = Array.from({ length: 170 }, () => ({
-    x: Math.random() * W, y: -Math.random() * H * 0.8, w: (6 + Math.random() * 6) * dpr, h: (10 + Math.random() * 8) * dpr,
-    vy: (2 + Math.random() * 3) * dpr, vx: (Math.random() - 0.5) * 2 * dpr, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.25,
-    c: colors[Math.floor(Math.random() * colors.length)], sway: Math.random() * 6,
-  }));
-  const start = performance.now();
-  cancelAnimationFrame(confettiRAF);
-  const frame = now => {
-    const el = (now - start) / 1000; ctx.clearRect(0, 0, W, H);
-    ctx.globalAlpha = el > 4 ? Math.max(0, 1 - (el - 4) / 1.5) : 1;
-    ps.forEach(p => {
-      p.y += p.vy; p.x += p.vx + Math.sin(el * 3 + p.sway) * 0.6 * dpr; p.r += p.vr;
-      if (p.y > H && el < 3) { p.y = -20 * dpr; p.x = Math.random() * W; }
-      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c;
-      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(el * 4 + p.sway))); ctx.restore();
-    });
-    if (el < 5.5) confettiRAF = requestAnimationFrame(frame); else ctx.clearRect(0, 0, W, H);
-  };
-  confettiRAF = requestAnimationFrame(frame);
-}
-function stopConfetti() { cancelAnimationFrame(confettiRAF); const cv = $("confetti"); cv.getContext("2d").clearRect(0, 0, cv.width, cv.height); }
+$("finDone").onclick = () => { $("finish").classList.remove("show"); confettiOff($("confetti")); goLibrary(); };
 
 /* ================= SETTINGS: app language (system / 한국어 / English) ================= */
 function paintLangSeg() { const c = langChoice(); document.querySelectorAll("#langSeg [data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === c)); }
@@ -576,6 +526,7 @@ function applyLang() {
   setLang(resolveLang()); applyStatic();
   $("promptText").textContent = promptText(); $("verText").textContent = `Speak Up v${VERSION}`;
   updateHintBtn(); setMicUI(listening);
+  sxApplyLang();
   if (view === "lib") renderLib(); else if (view === "info") renderInfo(); else if (view === "play") { renderAll(); requestAnimationFrame(() => centerCurrent(false)); }
 }
 $("settingsBtn").onclick = () => { paintLangSeg(); $("setOverlay").classList.add("show"); };
@@ -587,4 +538,5 @@ $("langSeg").addEventListener("click", e => { const b = e.target.closest("[data-
 ["gesturestart", "gesturechange", "gestureend"].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
 document.addEventListener("touchmove", e => { if (e.scale && e.scale !== 1) e.preventDefault(); }, { passive: false });
 
+initSx({ showView, view: () => view, toast, ask, renderLib });
 applyLang(); updateAuto(); updateKeep();

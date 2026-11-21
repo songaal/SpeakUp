@@ -1,6 +1,6 @@
 # Speak Up — notes for the next agent
 
-English-speaking practice web app. The learner sees a **literal (직역) Korean translation**, says the English sentence out loud, sees their words recognized live, and gets a word-by-word comparison with a match score. Content is dialogues *and* plain articles/news (no speaker).
+English-speaking practice web app with two modes (tabs at the top of the library): **대화** (dialogues) and **문장만들기** (sentence building, see its section). In 대화 the learner sees a **literal (직역) Korean translation**, says the English sentence out loud, sees their words recognized live, and gets a word-by-word comparison with a match score. Content is dialogues *and* plain articles/news (no speaker).
 
 - Live: https://speakup.kappy.app (also `speakup.<account>.workers.dev`)
 - Owner: Sammy (Korean speaker). **Reply to the owner in Korean.**
@@ -20,10 +20,16 @@ public/index.html        markup for all views + sheets (library, info, player, e
 public/style.css         all styles
 public/js/app.js         UI + state + speech engines (entry, ES module)
 public/js/core.js        pure logic, no DOM: md/json parse+serialize, tokenize, align, score, stats  ← unit-tested
+public/js/sx.js          문장만들기 UI: mode tabs, training/part/chapter/item pages, form sheet, unit test (speaking + word blocks), result
+public/js/sxcore.js      문장만들기 pure logic: chapter JSON → items, questions, step answers, word blocks  ← unit-tested (tests/sx.test.mjs)
+public/js/sxstore.js     IndexedDB store for chapter JSON files (fallback localStorage)
+public/js/speech.js      small one-capture recognizer for 문장만들기 + `hub` sharing the artifact `dictation` object with app.js
+public/js/fx.js          chime / thud / tick / fanfare (Web Audio), confetti (canvas), say() TTS, haptic — shared by both modes
 public/js/content.js     SAMPLE_MD (default dialogue: ordering coffee at a café), OLD_SAMPLE fingerprint, CONVERT_PROMPT / CONVERT_PROMPT_EN (📋 button text per UI language)
 public/js/i18n.js        UI strings (STR.ko / STR.en), QUOTES for the finish screen, language choice + applyStatic()
 public/manifest.webmanifest, public/icons/   PWA metadata + icons (icon.svg → PNGs via rsvg-convert)
 tests/core.test.mjs      node:test suite for core.js
+tests/sx.test.mjs        node:test suite for sxcore.js (inline fixture — don't commit the owner's book files, they are copyrighted)
 wrangler.jsonc           Cloudflare Worker (static assets only, custom domain speakup.kappy.app)
 ```
 
@@ -80,6 +86,21 @@ Data is per browser **and per origin** (artifact vs localhost vs kappy.app are s
 ```
 One sentence per line. Code-fence lines (```) are ignored so pasted AI output works. Export MD writes every dialogue joined by `---`. JSON: `{app:"speak-up", version:1, dialogues:[{title, lines:[{spk,en,ko}]}]}`; import also accepts a bare array or a single dialogue.
 
+## 문장만들기 (sentence building) — v3.14.0
+Owner's spec (2026/11/22): keep dialogues as 대화, add 문장만들기 as a second type; two tabs on top; once inside a type, stay focused on it. **Import-only**: content is never typed or edited in the app — only numbers and titles.
+- **Tabs**: segmented control `#modeTabs` under the library header (sliding pill). `speakup.mode.v1` = "dlg" | "sx"; `body[data-mode]`. In sx mode the library shows `#sxList` (training cards), 📋 프롬프트 / ✎ 편집 / FAB menu are hidden and the ＋ FAB creates a training. Tabs only exist on the library screen.
+- **Hierarchy**: 훈련 (training: title) → 파트 (part: number + title, "파트 만들기") → 챕터 (chapter: number + title + one JSON file, "챕터 만들기"). Picking the file fills the chapter number from the filename (`Part1-Chapter2.json` → 2) and the title from `book_title` if empty, and shows a summary (units / tips / story / questions). The file text is stored as-is in IndexedDB (`sxstore.js`, db `speakup`, store `files`, key = chapter id) and parsed into memory (`cache` Map) on create or first open. `navigator.storage.persist()` is requested. ✎ 수정 on training/part/chapter pages opens the same form sheet: rename, renumber, replace the chapter file, delete (asks; deleting removes files and that chapter's scores).
+- **sxView** (`#sxView`, one section, `nav = {t, p, c, it}`): part list (PART badges) → chapter list (CH badge, units, answered/total, progress ring) → chapter page (unit cards with grammar focus + main Korean sentence + avg ring, 💡 WRITING TIPS cards, 📖 LET'S WRITE A STORY card) → item page. Extended green FAB "＋ 파트 만들기 / 챕터 만들기". Page changes use the View Transitions API when available.
+- **Item page — no answers shown**: unit = hero (UNIT badge, focus, main Korean, core_structure as + chunks), stats (questions / answered / avg), Test or 처음부터 + 이어서 (resume `speakup.sxpos.v1`), STEP 1 steps (Korean with green "/" separators + hint chips), 응용 (type, prompt, chunk guide, word_hint), STEP 2 (Korean, chunk guide, hint chips), best % per question; tapping a question starts the test there. Tips = sections (lines starting "예:" become example boxes) or the modal strength ladder (`scale_order`). Story = prompts (Korean, hints, `en_template` only when it contains "..." — otherwise it is the answer) + Test for prompts that have an answer.
+- **Questions** (`sxcore.questionsOf`): unit = STEP 1 steps → each variation with an answer → each STEP 2 item; story = prompts with an answer. Answers are cleaned (`cleanAnswer`: drops "(= every Friday)"); the original is shown after answering. STEP 1 steps have no English in the data, so `stepAnswers` builds each one as a prefix of `main_sentence_en`, cut where the step's hint phrase appears (fuzzy stems, after the previous step; the last step = whole sentence). Those pages say "문장 쌓기" and, after answering, "메인 문장에서 만든 정답".
+- **Test view** (`#stView`): one question per page, ‹ › buttons, horizontal swipe, ←/→ keys, slide-in animation; segmented progress bar (colour = score); the n/N counter opens a jump grid. ✕ leaves (scores are already saved, position kept). Top-right **단어 입력** switch (`speakup.sxword.v1`, default off = speaking):
+  - Speaking (default): same masking/scoring as the player (`tokenize`/`fillWords`/`scoreAttempt`, filled words stay filled across retries of a question), 💡 힌트 cycle, 🔊 듣기 (TTS of the answer), ⏭ 자동 (`speakup.sxauto.v1`, next after 100%), ✅ 완료, mic. Recognizer = `speech.js` (no 유지 mode here). 30 s silence ends a capture.
+  - 단어 입력 (Word Story's block test): answer words as blocks sorted A→Z; tap to place in the blue tray, tap a placed block to take it back; placing the last block checks by itself; right = green, wrong = red struck-through with the right word under it; 💡 glows the next right block (or shakes the first wrong one); ↺ 다시 resets; the round button is ✓ check → → next.
+  - Sounds: chime on 100%, thud on a wrong block answer, tick on placing; haptics via `navigator.vibrate`.
+- **Result** (after › on the last question): avg, perfect / answered / time, per-section bars (STEP 1 / 응용 / STEP 2 / STORY), every question with its score (tap to jump back), **틀린 N문제 다시** (retry round with only the misses), 처음부터, 완료; fanfare, confetti when avg ≥ 60.
+- **Data**: `speakup.sx.v1` `{trainings:[{id,title,created,parts:[{id,no,title,created,chapters:[{id,no,title,file,size,created}]}]}]}` · `speakup.sxbest.v1` `{"chapterId|itemIndex|questionKey": best}` (keys `s1:i`, `var:i`, `s2:i`, `st:i`) · `speakup.sxpos.v1` `{"chapterId|itemIndex": questionIndex}` · IndexedDB files. Not included in 전체 내보내기 (the owner keeps the JSON files).
+- **Chapter JSON** (`parseChapter`): `{book_title, units:[{unit, grammar_focus, main_sentence_ko, main_sentence_en, core_structure, step1:{steps:[{step,ko,hint}], variations:[{type,prompt,hint,word_hint?,answer,steps?}]}, step2:[{no,ko,chunk_ko,hint,answer}]}, {type:"WRITING TIPS", topic, sections:[{title,points|examples}] | description + scale_order:[{level,example,meaning}]}, {type:"LET'S WRITE A STORY", title, prompts:[{ko,hint,en_template?,answer}]}]}`. Anything else is ignored; a file without units is refused.
+
 ## Owner preferences / decisions so far
 - Korean shown, English hidden is the core mode (not reading practice). Korean must be a literal translation to help recall the English word order.
 - Neighbouring sentences faded for continuity; past sentences scroll up, next ones below. Never show the English of a non-current line, solved or not.
@@ -95,9 +116,10 @@ One sentence per line. Code-fence lines (```) are ignored so pasted AI output wo
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.13.0 — 2026/11/20** (also `VERSION` in app.js, shown in Settings)
+- **Current version: v3.14.0 — 2026/11/22** (also `VERSION` in app.js, shown in Settings)
 
 ## Changelog
+- v3.14.0 (2026/11/22): 문장만들기 mode — 대화 | 문장만들기 tabs; trainings → parts → chapters (JSON import, IndexedDB); unit/tips/story pages without answers; unit test one question per page with speaking (default) or 단어 입력 word blocks, TTS, swipe, jump grid, result screen with retry of misses. Sound/confetti/TTS moved to fx.js.
 - v3.13.0 (2026/11/20): library sorted newest first with countdown numbers (manual reorder removed); floating ＋ with 새 대화 / 가져오기; 전체 내보내기 moved to Settings; bigger SVG gear; more bottom space on every screen.
 - v3.12.0 (2026/11/19): filled words stay filled across retries of a line (session); zoom disabled (pinch, double-tap, focus) with text selection still allowed.
 - v3.11.0 (2026/11/19): finish screen after the last sentence (average score, stats, confetti, fanfare, perseverance quote, 완료 → list). Settings with app language (system default / 한국어 / English) — all UI strings moved to i18n.js; English version of the AI prompt.
