@@ -92,7 +92,7 @@ export function newTraining() {
     },
   });
 }
-function openTraining(id) { nav = { t: id, p: null, c: null, it: null }; go(); }
+function openTraining(id) { nav = { t: id, p: null, c: null, it: null }; editMode = false; go(); }
 
 /* ================= sx view (training / part / chapter / item) ================= */
 function go(dir = "fwd") {
@@ -111,31 +111,42 @@ async function renderSx() {
   const crumb = [tr.title, p && `PART ${p.no}`, ch && `CH ${ch.no}`].filter(Boolean);
   $("sxCrumb").textContent = crumb.slice(0, -1).join(" › ") || t("sxTraining");
   $("sxMore").style.visibility = l === "item" ? "hidden" : "";
-  const fab = $("sxFab"); fab.style.display = "none";
+  if (l !== "training") editMode = false;
+  $("sxMore").textContent = l === "training" ? t(editMode ? "sxDoneEdit" : "sxEdit") : t("editInfo");
+  $("sxMore").classList.toggle("editon", l === "training" && editMode);
+  $("sxView").classList.toggle("editing", l === "training" && editMode);
+  $("sxView").classList.toggle("trlevel", l === "training");
+  closeDial();
+  const fab = $("sxFab"); fab.style.display = "none"; fab.classList.remove("round");
   if (l === "training") {
     $("sxTitle").textContent = tr.title;
+    if (editMode) $("sxCrumb").textContent = t("sxEditing");
     const parts = [...tr.parts].sort(byNo), chs = [];
-    body.innerHTML = parts.length ? parts.map(pt => {
-      const list = [...pt.chapters].sort(byNo); list.forEach(c => chs.push(c));
-      return `<div class="psec"><div class="psec-h"><span class="pbadge">PART ${esc(pt.no)}</span><b>${esc(pt.title)}</b><button class="psec-ed" data-pedit="${pt.id}" aria-label="${esc(t("sxEditPart"))}">✎</button></div>
-        ${list.map(c => `<div class="dcard sxcard" data-cid="${c.id}" data-pc="${pt.id}">
-          <span class="nobadge"><small>CH</small>${esc(c.no)}</span>
-          <div class="dmain"><div class="dt">${esc(c.title)}</div><div class="dm" data-cmeta="${c.id}">${esc(c.file || "")}</div></div>
-          <span class="cring" data-cring="${c.id}"></span><span class="chev">›</span></div>`).join("")}
-        <button class="addch" data-padd="${pt.id}">＋ ${t("sxNewChapter")}</button></div>`;
-    }).join("") : emptyHint("📚", t("sxNoParts"));
-    body.querySelectorAll("[data-cid]").forEach(c => c.onclick = () => { nav.p = c.dataset.pc; nav.c = c.dataset.cid; go(); });
-    body.querySelectorAll("[data-pedit]").forEach(b => b.onclick = e => { e.stopPropagation(); editPart(tr.parts.find(x => x.id === b.dataset.pedit)); });
-    body.querySelectorAll("[data-padd]").forEach(b => b.onclick = () => newChapter(tr.parts.find(x => x.id === b.dataset.padd)));
-    fab.style.display = ""; $("sxFabLbl").textContent = t("sxNewPart"); fab.onclick = newPart;
-    for (const c of chs) {   // fill unit counts / progress once the files are read
+    parts.forEach(pt => [...pt.chapters].sort(byNo).forEach(c => chs.push(c)));
+    if (editMode) body.innerHTML = trainingEditHTML(tr, parts);
+    else body.innerHTML = (chs.length ? `<div class="trprog"><span>${t("sxProgLbl")}</span><div class="trbar"><i id="sxProgBar" style="width:0%"></i></div><b id="sxProgTxt"></b></div>` : "")
+      + (parts.length ? parts.map(pt => `<div class="pdiv"><span class="pno">PART ${esc(pt.no)}</span><b>${esc(pt.title)}</b><i></i></div>`
+        + ([...pt.chapters].sort(byNo).map(c => `<button class="chcard" data-cid="${c.id}" data-pc="${pt.id}"><span class="chbadge" data-cbadge="${c.id}">${esc(c.no)}</span>
+            <span class="chmain"><span class="cht">CH ${esc(c.no)} · ${esc(c.title)}</span><span class="chm" data-cmeta="${c.id}">${esc(c.file || "")}</span></span>
+            <svg class="chev2" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`).join("")
+          || `<div class="pempty">${t("sxNoChaptersYet")}</div>`)).join("")
+      : emptyHint("📚", t("sxNoParts")));
+    body.querySelectorAll(".chcard[data-cid]").forEach(c => c.onclick = () => { nav.p = c.dataset.pc; nav.c = c.dataset.cid; go(); });
+    if (editMode) { wireTrainingEdit(tr, body); return; }
+    fab.style.display = ""; fab.classList.add("round"); $("sxFabLbl").textContent = ""; fab.onclick = toggleDial;
+    let qT = 0, qD = 0, cDone = 0, left = chs.length;
+    for (const c of chs) {   // status per chapter once its file is read
       loadChapter(c).then(d => {
         const units = d.items.map((it, i) => [it, i]).filter(([it]) => it.kind === "unit");
         let tot = 0, done = 0; units.forEach(([it, i]) => { const s = itemStats(c.id, i, it); tot += s.total; done += s.done; });
-        const m = body.querySelector(`[data-cmeta="${c.id}"]`), r = body.querySelector(`[data-cring="${c.id}"]`);
-        if (m) m.textContent = t("sxChapterMeta", units.length, done, tot);
-        if (r) r.innerHTML = tot ? ring(done, tot) : "";
-      }).catch(() => { const m = body.querySelector(`[data-cmeta="${c.id}"]`); if (m) m.textContent = t("sxFileMissing"); });
+        qT += tot; qD += done; if (tot && done >= tot) cDone++;
+        const st = !tot || !done ? "new" : done >= tot ? "done" : "doing";
+        const m = body.querySelector(`[data-cmeta="${c.id}"]`), card = body.querySelector(`.chcard[data-cid="${c.id}"]`), b = body.querySelector(`[data-cbadge="${c.id}"]`);
+        if (m) m.textContent = `${t("sxUnitsCount", units.length)} · ${st === "done" ? t("sxStDone") : st === "doing" ? t("sxStDoing", done, tot) : t("sxStNew")}`;
+        if (card) card.classList.add(st);
+        if (b && st === "done") b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      }).catch(() => { const m = body.querySelector(`[data-cmeta="${c.id}"]`); if (m) m.textContent = t("sxFileMissing"); })
+        .finally(() => { if (--left) return; const bar = $("sxProgBar"), tx = $("sxProgTxt"); if (bar) bar.style.width = (qT ? Math.round(qD / qT * 100) : 0) + "%"; if (tx) tx.textContent = t("sxProgress", cDone, chs.length); });
     }
   } else if (l === "chapter") {
     $("sxTitle").textContent = `CH ${ch.no}. ${ch.title}`;
@@ -236,7 +247,130 @@ function newChapter(p) {
 }
 function editCurrent() {
   const l = level(), tr = trainingOf(), p = partOf(), ch = chapterOf();
-  if (l === "training") openForm({
+  if (l === "training") { editMode = !editMode; renderSx(); return; }
+  editChapter(tr, p, ch);
+}
+let editMode = false;   // training page: ✎ buttons only in 편집 mode (v3.21, 시안 A)
+const ICON = {
+  pen: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg>`,
+  bin: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>`,
+  dots: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>`,
+  plus: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`,
+  file: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z M14 3v5h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>`,
+  fileok: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z M14 3v5h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M10 14l2 2 3-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  lines: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`,
+  swap: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5l2 2M20 12a8 8 0 0 1-14 5l-2-2M20 4v5h-5M4 20v-5h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  up: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+};
+function trainingEditHTML(tr, parts) {
+  return `<button class="trname" id="sxTrName"><span>${esc(tr.title)}</span>${ICON.pen}</button>`
+    + parts.map(pt => `<div class="eprow"><span class="pno">PART ${esc(pt.no)}</span><b>${esc(pt.title)}</b>
+        <button class="eadd" data-padd="${pt.id}">${ICON.plus}${t("sxTabCh")}</button><button class="eic" data-pedit="${pt.id}" aria-label="${esc(t("sxEditPart"))}">${ICON.dots}</button></div>`
+      + [...pt.chapters].sort(byNo).map(c => `<div class="ecrow"><div class="chmain"><span class="cht">CH ${esc(c.no)} · ${esc(c.title)}</span><span class="chm">${esc(c.file || "")}</span></div>
+        <button class="eic" data-cedit="${c.id}" data-pc="${pt.id}" aria-label="${esc(t("sxEditChapter"))}">${ICON.pen}</button><button class="eic del" data-cdel="${c.id}" data-pc="${pt.id}" aria-label="${esc(t("del"))}">${ICON.bin}</button></div>`).join("")).join("")
+    + (parts.length ? "" : emptyHint("📚", t("sxNoParts")))
+    + `<div class="ebar"><button class="btn sec" id="sxEAddPart">${ICON.plus}${t("sxAddPart")}</button><button class="btn sec danger2" id="sxEDelTr">${t("sxDelTraining")}</button></div>`;
+}
+function wireTrainingEdit(tr, body) {
+  const P = id => tr.parts.find(x => x.id === id);
+  $("sxTrName").onclick = renameTraining;
+  body.querySelectorAll("[data-padd]").forEach(b => b.onclick = () => openAdd("ch", b.dataset.padd));
+  body.querySelectorAll("[data-pedit]").forEach(b => b.onclick = () => editPart(P(b.dataset.pedit)));
+  body.querySelectorAll("[data-cedit]").forEach(b => b.onclick = () => { const p = P(b.dataset.pc); editChapter(tr, p, p.chapters.find(c => c.id === b.dataset.cedit)); });
+  body.querySelectorAll("[data-cdel]").forEach(b => b.onclick = async () => {
+    const p = P(b.dataset.pc), ch = p.chapters.find(c => c.id === b.dataset.cdel);
+    if (!await C.ask(t("sxConfirmDelChapter", ch.no, ch.title))) return;
+    dropChapter(ch); p.chapters = p.chapters.filter(x => x !== ch); saveMeta(); renderSx(); C.toast(t("deleted"));
+  });
+  $("sxEAddPart").onclick = () => openAdd("pt");
+  $("sxEDelTr").onclick = async () => {
+    if (!await C.ask(t("sxConfirmDelTraining", tr.title))) return;
+    tr.parts.forEach(pt => pt.chapters.forEach(dropChapter)); meta.trainings = meta.trainings.filter(x => x !== tr); saveMeta();
+    nav = { t: null, p: null, c: null, it: null }; editMode = false; C.showView("lib"); C.renderLib(); C.toast(t("deleted"));
+  };
+}
+// ＋ speed dial (training page): 파트 추가 / 챕터 추가 (JSON)
+function toggleDial() { $("sxView").classList.toggle("dial"); }
+function closeDial() { $("sxView").classList.remove("dial"); }
+
+/* ---- 추가 시트 (시안 A3): 챕터 | 파트 tabs, file card, part chips, number stepper, title ---- */
+let AS = null;
+const nextNo = list => list.reduce((a, x) => Math.max(a, +x.no || 0), 0) + 1;
+function openAdd(tab = "ch", pid = null) {
+  const tr = trainingOf(), parts = [...tr.parts].sort(byNo);
+  const pick = pid || (parts.length ? parts[parts.length - 1].id : null);
+  AS = { tab: parts.length ? tab : "pt", back: !parts.length && tab === "ch", pid: pick, file: null, chNo: pick ? nextNo(tr.parts.find(x => x.id === pick).chapters) : 1, chTitle: "", ptNo: nextNo(tr.parts), ptTitle: "", noFromFile: false };
+  closeDial(); paintAdd(); $("sxAdd").classList.add("show");
+}
+function syncAdd() {
+  const g = id => $(id) ? $(id).value.trim() : null;
+  if (AS.tab === "ch") { if (g("asNo") != null) AS.chNo = g("asNo"); if (g("asTitle") != null) AS.chTitle = g("asTitle"); }
+  else { if (g("asNo") != null) AS.ptNo = g("asNo"); if (g("asTitle") != null) AS.ptTitle = g("asTitle"); }
+}
+function paintAdd() {
+  const tr = trainingOf(), parts = [...tr.parts].sort(byNo), f = AS.file;
+  $("sxAddSeg").querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === AS.tab));
+  $("sxAddErr").className = "ferr";
+  const stepper = v => `<div class="stepper"><button type="button" data-step="-1" aria-label="−">−</button><input id="asNo" inputmode="numeric" value="${esc(v)}" autocomplete="off"><button type="button" data-step="1" aria-label="+">+</button></div>`;
+  if (AS.tab === "ch") {
+    const cnt = k => f ? f.parsed.items.filter(i => i.kind === k).length : 0;
+    $("sxAddBody").innerHTML = (f
+      ? `<div class="afile ok"><span class="afic">${ICON.fileok}</span><div class="afmain"><b>${esc(f.name)}</b><div class="afchips"><span class="c1">${t("sxUnitsN", cnt("unit"))}</span>${cnt("tips") ? `<span class="c2">${t("sxTipsN", cnt("tips"))}</span>` : ""}${cnt("story") ? `<span class="c3">${t("sxStoryN", cnt("story"))}</span>` : ""}</div></div><button type="button" class="afswap" id="asPick" aria-label="${esc(t("sxReplaceFile"))}">${ICON.swap}</button></div>`
+      : `<button type="button" class="afile drop" id="asPick"><span class="afic up">${ICON.up}</span><b>${t("sxPickJson")}</b><small>${t("sxPickJsonSub")}</small></button>`)
+      + `<div class="alab">${t("sxWhichPart")}</div><div class="pchips">${parts.map(pt => `<button type="button" class="pchip ${pt.id === AS.pid ? "on" : ""}" data-pid="${pt.id}">PART ${esc(pt.no)}${pt.id === AS.pid ? ` · ${esc(pt.title)}` : ""}</button>`).join("")}<button type="button" class="pchip new" id="asNewPart">＋ ${t("sxNewPartChip")}</button></div>`
+      + `<div class="arow"><div class="acol no"><label class="alab" for="asNo">${t("sxNoLbl")}</label>${stepper(AS.chNo)}</div>
+         <div class="acol"><label class="alab" for="asTitle">${t("sxTitleLbl")}${AS.titleAuto ? ` <i>· ${t("sxFromFile")}</i>` : ""}</label><input class="ainp" id="asTitle" value="${esc(AS.chTitle)}" placeholder="${esc(t("sxChapterPh"))}" autocomplete="off"></div></div>`;
+    $("sxAddGo").textContent = t("sxNewChapter");
+  } else {
+    $("sxAddBody").innerHTML = `<div class="arow"><div class="acol no"><label class="alab" for="asNo">${t("sxNoLbl")}</label>${stepper(AS.ptNo)}</div>
+      <div class="acol"><label class="alab" for="asTitle">${t("sxTitleLbl")}</label><input class="ainp" id="asTitle" value="${esc(AS.ptTitle)}" placeholder="${esc(t("sxPartPh"))}" autocomplete="off"></div></div>`;
+    $("sxAddGo").textContent = t("sxNewPart");
+  }
+  const b = $("sxAddBody");
+  b.querySelectorAll("[data-step]").forEach(x => x.onclick = () => { const i = $("asNo"); i.value = Math.max(1, (parseInt(i.value, 10) || 0) + +x.dataset.step); });
+  b.querySelectorAll("[data-pid]").forEach(x => x.onclick = () => { syncAdd(); AS.pid = x.dataset.pid; if (!AS.noFromFile) AS.chNo = nextNo(tr.parts.find(p => p.id === AS.pid).chapters); paintAdd(); });
+  if ($("asNewPart")) $("asNewPart").onclick = () => { syncAdd(); AS.back = true; AS.tab = "pt"; paintAdd(); };
+  if ($("asPick")) $("asPick").onclick = pickAddFile;
+}
+function pickAddFile() {
+  const inp = $("sxFileIn"); inp.value = "";
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    syncAdd();
+    try {
+      const text = await f.text(), parsed = parseChapter(text);
+      AS.file = { name: f.name, text, parsed };
+      const n = numbersFromFilename(f.name), tr = trainingOf();
+      if (n.part) { const p = tr.parts.find(x => +x.no === n.part); if (p) AS.pid = p.id; }
+      if (n.chapter) { AS.chNo = n.chapter; AS.noFromFile = true; }
+      if (parsed.title && (!AS.chTitle || AS.titleAuto)) { AS.chTitle = parsed.title; AS.titleAuto = true; }
+      paintAdd();
+    } catch (e) { $("sxAddErr").textContent = t("sxBadFile"); $("sxAddErr").className = "ferr show"; }
+  };
+  inp.click();
+}
+async function submitAdd() {
+  syncAdd();
+  const tr = trainingOf(), err = m => { $("sxAddErr").textContent = m; $("sxAddErr").className = "ferr show"; };
+  if (AS.tab === "pt") {
+    if (!AS.ptNo) return err(t("sxNeedNo")); if (!AS.ptTitle) return err(t("sxNeedTitle"));
+    const pt = { id: uid(), no: +AS.ptNo, title: AS.ptTitle, created: Date.now(), chapters: [] };
+    tr.parts.push(pt); saveMeta(); C.toast(t("sxCreated", `PART ${pt.no}`));
+    if (AS.back) { AS.back = false; AS.tab = "ch"; AS.pid = pt.id; if (!AS.noFromFile) AS.chNo = 1; AS.ptTitle = ""; AS.ptNo = nextNo(tr.parts); paintAdd(); renderSx(); return; }
+    $("sxAdd").classList.remove("show"); renderSx(); return;
+  }
+  const p = tr.parts.find(x => x.id === AS.pid);
+  if (!AS.file) return err(t("sxNeedFile")); if (!p) return err(t("sxNeedPart")); if (!AS.chNo) return err(t("sxNeedNo")); if (!AS.chTitle) return err(t("sxNeedTitle"));
+  const id = uid(); $("sxAddGo").disabled = true;
+  try { await putFile(id, AS.file.text); } catch (e) { $("sxAddGo").disabled = false; return err(t("sxSaveFailed")); }
+  $("sxAddGo").disabled = false;
+  cache.set(id, AS.file.parsed);
+  p.chapters.push({ id, no: +AS.chNo, title: AS.chTitle, file: AS.file.name, size: AS.file.text.length, created: Date.now() }); saveMeta();
+  $("sxAdd").classList.remove("show"); renderSx(); C.toast(t("sxCreated", `CH ${AS.chNo}`));
+}
+function renameTraining() {
+  const tr = trainingOf();
+  openForm({
     title: t("sxEditTraining"), submit: t("save"), fields: [{ name: "title", label: t("sxTrainingName"), type: "text", value: tr.title }],
     onSubmit: v => { if (!v.title) return t("sxNeedTitle"); tr.title = v.title; saveMeta(); renderSx(); },
     onDelete: async () => {
@@ -245,7 +379,6 @@ function editCurrent() {
       nav = { t: null, p: null, c: null, it: null }; C.showView("lib"); C.renderLib(); C.toast(t("deleted"));
     },
   });
-  else if (l === "chapter") editChapter(tr, p, ch);
 }
 function editPart(p) {
   const tr = trainingOf();
@@ -777,6 +910,11 @@ export function initSx(ctx) {
   C = ctx; paintTabs();
   $("modeTabs").addEventListener("click", e => { const b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });
   $("sxBack").onclick = back; $("sxMore").onclick = editCurrent;
+  $("sxDialPart").onclick = () => openAdd("pt"); $("sxDialCh").onclick = () => openAdd("ch");
+  $("sxView").addEventListener("pointerdown", e => { if ($("sxView").classList.contains("dial") && !e.target.closest("#sxFab,.sxdial")) closeDial(); });
+  $("sxAddSeg").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (!b || b.dataset.tab === AS.tab) return; syncAdd(); AS.tab = b.dataset.tab; if (AS.tab === "ch") AS.back = false; paintAdd(); });
+  $("sxAddGo").onclick = submitAdd;
+  $("sxAdd").addEventListener("click", e => { if (e.target.id === "sxAdd") $("sxAdd").classList.remove("show"); });
   // item page: one delegated handler (rows of every section, 테스트, 이어서)
   const openRow = e => {
     if (e.target.closest("#sxStart")) { startTest(0, "new"); return true; }

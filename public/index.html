@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3.20.1">
+<link rel="stylesheet" href="style.css?v=3.21.0">
 </head>
 <body class="v-lib">
 
@@ -112,6 +112,10 @@
   </div>
   <div class="sxscroll" id="sxScroll"><div class="infoin" id="sxBody"></div></div>
   <button class="xfab" id="sxFab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span id="sxFabLbl"></span></button>
+  <div class="sxdial">
+    <div class="dial-it"><span data-i18n="sxAddPart">파트 추가</span><button class="dial-b part" id="sxDialPart" data-i18n-aria="sxAddPart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button></div>
+    <div class="dial-it"><span data-i18n="sxAddChJson">챕터 추가 (JSON)</span><button class="dial-b ch" id="sxDialCh" data-i18n-aria="sxAddChJson"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z M14 3v5h5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg></button></div>
+  </div>
   <input type="file" id="sxFileIn" accept=".json,application/json" hidden>
 </section>
 
@@ -249,6 +253,15 @@
     </div>
   </div>
 </div>
+<div class="overlay" id="sxAdd">
+  <div class="sheet addsheet">
+    <div class="grab"></div>
+    <div class="seg2" id="sxAddSeg"><button type="button" data-tab="ch" data-i18n="sxTabCh">챕터</button><button type="button" data-tab="pt" data-i18n="sxTabPt">파트</button></div>
+    <div id="sxAddBody"></div>
+    <div class="ferr" id="sxAddErr"></div>
+    <button class="btn pri abig" id="sxAddGo"></button>
+  </div>
+</div>
 <div class="overlay" id="stGrid">
   <div class="sheet">
     <h2 data-i18n="sxJump">문제로 이동</h2>
@@ -258,6 +271,6 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=3.20.1"></script>
+<script type="module" src="js/app.js?v=3.21.0"></script>
 </body>
 </html>

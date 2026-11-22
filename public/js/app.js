@@ -5,7 +5,7 @@ import { t, lang, setLang, langChoice, setLangChoice, resolveLang, applyStatic, 
 import { unlockAudio, chime, fanfare, startConfetti as confettiOn, stopConfetti as confettiOff } from "./fx.js";
 import { hub } from "./speech.js";
 import { initSx, sxApplyLang, renderTrainings, newTraining } from "./sx.js";
-const VERSION = "3.20.1";
+const VERSION = "3.21.0";
 const promptText = () => lang() === "en" ? CONVERT_PROMPT_EN : CONVERT_PROMPT;
 
 /* ================= store (localStorage) ================= */
