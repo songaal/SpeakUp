@@ -22,8 +22,11 @@ let meta = ls.get(K.meta, null); if (!meta || !Array.isArray(meta.trainings)) me
 let best = ls.get(K.best, {});      // "chapterId|itemIndex|questionKey" → best score
 let sess = ls.get(K.sess, {});      // "chapterId|itemIndex" → unfinished run {pos, res:{qi: score}, start} (이어서)
 // input mode: "type" (keyboard into the blanks — default since v3.18) | "speak" | "block" (word blocks)
-let inMode = ls.get(K.input, "type"); if (!["speak", "block", "type"].includes(inMode)) inMode = "type";
-let wordMode = inMode !== "speak", blockMode = inMode === "block", typeMode = inMode === "type";
+// v3.19: speaking and typing are one mode ("type": blanks you can type into any time + a mic you can turn on
+// any time; speech fills the blanks it hears). The other mode is "block" (word blocks). Old "speak" → "type".
+let inMode = ls.get(K.input, "type"); if (inMode !== "block") inMode = "type";
+let wordMode = true, blockMode = inMode === "block", typeMode = inMode === "type";
+const stayOn = () => keepOn || typeMode;   // mic stays on across questions (typing mode: until you turn it off)
 let autoNext = ls.get(K.auto, true), keepOn = ls.get(K.keep, false);
 const saveMeta = () => ls.set(K.meta, meta);
 const cache = new Map();            // chapterId → parsed chapter (loaded into memory once)
@@ -328,6 +331,7 @@ const rec = createRecognizer({
   onUpdate: live,
   onEnd: ({ text, parts, interim, dropped }) => {
     clearTimeout(silenceT); paintMic(); if (dropped || !S) return;
+    if (typeMode && !qOf().noAnswer) { const h = $("stHeard"); if (h) h.innerHTML = ""; return; }   // mic off = no check
     if (!text && S.res[qiOf()]) { paintAnswer(); return; }        // 유지: mic turned off after the question was scored
     evaluate(text, parts, interim);
   },
@@ -395,7 +399,7 @@ function renderQ(dir) {
   paintAnswer();
   paintProg(); paintMic(); updateHint();
   paintResultPill(r);
-  if (rec.listening && !wordMode && !r) live({ finalText: "", interim: "", parts: [] });   // keep mode: still listening on the new question
+  if (rec.listening && typeMode) live({ finalText: "", interim: "", parts: [] });   // mic still on: listening on the new question
   if (typeMode && !q.noAnswer && !tstate(qi).done) focusSlot(firstOpen(tstate(qi)));   // ready to type in the first blank
 }
 const secName = sec => sec === "s1" ? `STEP 1 · ${t("sxSecSteps")}` : sec === "var" ? t("sxSecVarShort") : sec === "s2" ? "STEP 2" : "STORY";
@@ -412,8 +416,9 @@ function paintResultPill(r) {
 /* ---- answer area: speaking (masked word slots) or word blocks ---- */
 function paintAnswer() {
   const q = qOf(), qi = qiOf(), el = $("stAns"); if (!el) return;
-  if (typeMode) { paintType(); return; }
+  if (typeMode && !q.noAnswer) { paintType(); return; }
   if (blockMode) { paintBlocks(); return; }
+  if (typeMode) { $("stCheck").disabled = false; $("stCheck").classList.add("next"); }   // free speaking: → moves on
   if (q.noAnswer) {
     const r = S.res[qi];
     el.innerHTML = `<div class="freebox">${t("sxNoAnsHelp")}</div><div class="heard" id="stHeard">${r && r.said ? `<span class="label">${t("youSaid")}</span>${esc(r.said)}` : `<span class="ph">${speechEngine() ? t("sxSayIt") : t("errUnsupported")}</span>`}</div>`;
@@ -435,8 +440,9 @@ const answerLine = q => (q.raw !== q.en ? `<div class="rawans">${esc(q.raw)}</di
 let cur = { finalText: "", interim: "", parts: [] };
 function live({ finalText, interim, parts }) {
   cur = { finalText, interim, parts };
-  if (!S || wordMode) return;
+  if (!S || blockMode) return;
   const q = qOf(), qi = qiOf(), full = (finalText + " " + interim).trim();
+  if (typeMode && !q.noAnswer) { liveType(full, parts, interim, finalText); return; }
   if (full && S.res[qi] && S.res[qi].kind === "speak") { delete S.res[qi]; paintResultPill(null); }
   if (q.noAnswer) {
     if (full && S.res[qi]) { delete S.res[qi]; paintResultPill(null); paintAnswer(); }
@@ -460,7 +466,7 @@ function live({ finalText, interim, parts }) {
 // Normal: stop the mic (onEnd scores). 유지: score now and keep the same session open for the next try / question.
 function capDone() {
   if (!rec.listening) return;
-  if (!keepOn) { rec.stop(); return; }
+  if (!stayOn()) { rec.stop(); return; }
   clearTimeout(silenceT);
   const { finalText, interim, parts } = cur, text = (finalText + " " + interim).trim();
   if (!text) return;
@@ -488,7 +494,7 @@ function record(q, qi, res) {
   const top = $("stStage").querySelector(".qtop .bs"); if (top) top.outerHTML = bsHTML(best[k]);
   saveSess();
   clearTimeout(autoT);
-  if (res.score === 100 && rec.listening && keepOn) {
+  if (res.score === 100 && rec.listening && stayOn()) {
     if (!pendingOthers()) rec.stop(true);                         // nothing left to answer: mic off
     else if (autoNext) rec.gate(true);                            // ignore speech until the next question is up
   }
@@ -615,6 +621,7 @@ function paintType() {
   if (q.noAnswer) { el.innerHTML = `<div class="freebox">${t("sxNoAnsType")}</div>`; btn.disabled = true; btn.classList.remove("next"); return; }
   const s = tstate(qi);
   el.innerHTML = `<div class="en typed" id="stTyped">${s.slots.map((sl, k) => `<span class="tw">${esc(sl.lead)}<input class="tin ${s.ok[k] ? "ok" : s.bad[k] ? "bad" : ""}" data-t="${k}" value="${esc(s.vals[k] || "")}"${s.ok[k] ? ` readonly tabindex="-1"` : ""} placeholder="${esc(tph(sl.word))}" style="width:${twidth(sl.word, s.vals[k])}ch" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" aria-label="${k + 1}">${esc(sl.tail)}</span>`).join("")}</div>
+    <div class="heard tyheard" id="stHeard"></div>
     ${s.done ? answerLine(q) : ""}`;
   btn.disabled = false; btn.classList.toggle("next", s.done);
 }
@@ -640,6 +647,23 @@ function typeHint() {
   hintLv = (hintLv + 1) % 3; updateHint();
   const s = tstate(qiOf());
   $("stStage").querySelectorAll(".tin").forEach(el => { el.placeholder = tph(s.slots[+el.dataset.t].word); });
+}
+// Speech in typing mode: every word heard right fills its blank (green, locked). Typed blanks stay as they are.
+function liveType(full, parts, interim, finalText) {
+  const q = qOf(), qi = qiOf(), s = tstate(qi), h = $("stHeard");
+  if (h) h.innerHTML = full ? `<span class="label">LISTENING…</span>${esc(finalText)} <span class="interim">${esc(interim)}</span>` : `<span class="label">${t("listening")}</span><span class="ph">${t("listeningPh")}</span>`;
+  if (!full || s.done) return;
+  const got = [...fillWords(refOf(q), [full, ...parts, interim])].filter(k => k < s.slots.length && !s.ok[k]);
+  if (!got.length) return;
+  const a = document.activeElement, fk = a && a.classList && a.classList.contains("tin") ? +a.dataset.t : -1;
+  got.forEach(k => { s.ok[k] = true; s.bad[k] = false; s.vals[k] = s.slots[k].word; });
+  tick(); haptic(8);
+  const heard = h ? h.innerHTML : "";
+  paintType(); if ($("stHeard")) $("stHeard").innerHTML = heard;
+  $("stStage").querySelectorAll(".tin.ok").forEach(el => { if (got.includes(+el.dataset.t)) el.classList.add("heardok"); });
+  if (s.ok.length === s.slots.length && s.slots.every((_, k) => s.ok[k])) { checkType(); return; }
+  if (allFilled(s)) { checkType(); return; }
+  if (fk >= 0) { if (!s.ok[fk]) { tKeep = true; focusSlot(fk); tKeep = false; } else focusSlot(firstOpen(s)); }   // keep typing where you were
 }
 function resetType() {
   const qi = qiOf(); delete T[qi];
@@ -687,6 +711,8 @@ function typeEvents(stage) {
 function paintMic() {
   const m = $("stMic"), on = rec.listening;
   m.classList.toggle("rec", on); m.disabled = !speechEngine();
+  const mt = $("stMicT"); mt.classList.toggle("rec", on); mt.disabled = !speechEngine();
+  mt.title = on ? t("sxMicOff") : t("sxMicOn"); mt.setAttribute("aria-label", mt.title);
   m.title = on ? (keepOn ? t("micKeep") : t("micTalk")) : t("micIdle"); m.setAttribute("aria-label", m.title);
   $("stKeep").classList.toggle("on", keepOn); $("stKeep").setAttribute("aria-pressed", keepOn);
   $("stDone").disabled = true;
@@ -703,7 +729,7 @@ function updateHint() {
 function leaveQ() {
   clearTimeout(silenceT);
   if (!rec.listening) return;
-  if (keepOn && !wordMode) { rec.reset(); rec.gate(false); cur = { finalText: "", interim: "", parts: [] }; }
+  if (stayOn() && !blockMode) { rec.reset(); rec.gate(false); cur = { finalText: "", interim: "", parts: [] }; }
   else rec.stop(true);
 }
 // Questions still to answer (free-speaking ones without an answer are optional).
@@ -763,7 +789,7 @@ export function initSx(ctx) {
     const b = e.target.closest("[data-im]"); if (!b || b.dataset.im === inMode) return;
     if (rec.listening) rec.stop(true);
     drEnd(); inMode = b.dataset.im; ls.set(K.input, inMode);
-    wordMode = inMode !== "speak"; blockMode = inMode === "block"; typeMode = inMode === "type";
+    blockMode = inMode === "block"; typeMode = inMode === "type";
     hintLv = 0; paintMode(); updateHint(); if (!S) return;
     paintAnswer(); paintResultPill(S.res[qiOf()]);
     C.toast(t(typeMode ? "sxTypeOnToast" : blockMode ? "sxWordOnToast" : "sxWordOffToast"));
@@ -776,6 +802,16 @@ export function initSx(ctx) {
     const qi = qiOf(); clearTimeout(autoT);
     if (S.res[qi] && S.res[qi].kind === "speak") { delete S.res[qi]; paintResultPill(null); }
     filled = new Set(keep[qi] || []); liveSt = null; $("stErr").className = "err"; hush();
+    rec.start(); paintMic(); live({ finalText: "", interim: "", parts: [] });
+  };
+  // typing mode mic: a plain on/off switch — turning it off never checks
+  // tapping the mic / ✓ / 💡 / ↺ keeps the text cursor (and the phone keyboard) where it is
+  ["stMicT", "stCheck", "stHintW", "stReset"].forEach(id => $(id).addEventListener("mousedown", e => e.preventDefault()));
+  $("stMicT").onclick = () => {
+    unlockAudio(); if (!S) return;
+    if (rec.listening) { rec.stop(); return; }
+    $("stErr").className = "err"; hush(); clearTimeout(autoT);
+    cur = { finalText: "", interim: "", parts: [] };
     rec.start(); paintMic(); live({ finalText: "", interim: "", parts: [] });
   };
   $("stKeep").onclick = () => { keepOn = !keepOn; ls.set(K.keep, keepOn); paintMic(); if (rec.listening) $("stDone").disabled = !(cur.finalText + cur.interim).trim(); C.toast(keepOn ? t("keepOnToast") : t("keepOffToast")); };

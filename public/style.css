@@ -477,3 +477,9 @@
   .fbtn:active{transform:translateY(2px);border-bottom-width:2px}
   .fbtn.on{border-color:#84D8FF;background:var(--blue-l)}
   #stView.wordmode .ststage{padding-bottom:84px}
+  /* v3.19: typing + speaking in one mode — mic next to the check button */
+  .micgrp2{display:flex;align-items:center;gap:16px}
+  #stView:not(.typemode) #stMicT{display:none}
+  .tyheard:empty{display:none}
+  .tyheard{margin-top:16px}
+  .tin.heardok{animation:blkpop .3s cubic-bezier(.3,1.6,.5,1)}
