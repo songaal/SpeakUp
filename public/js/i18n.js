@@ -75,7 +75,11 @@ export const STR = {
     sxNoAns: "정답 없음", sxFreeSpeak: "정답 없이 말하기", sxFreeDone: "말한 내용을 기록했어요",
     sxNoAnsHelp: "이 문제는 파일에 영어 정답이 없어요. 자유롭게 말해 보세요 — 점수 없이 말한 내용만 남아요.",
     sxNoAnsWord: "이 문제는 파일에 영어 정답이 없어서 단어 입력을 할 수 없어요. 단어 입력을 끄고 말하기로 연습하세요.", sxNoAnsListen: "이 문제는 정답 문장이 없어요",
-    sxQuit: "테스트 나가기", sxWordMode: "단어 입력", sxReset: "↺ 다시", sxCheck: "확인", sxJump: "문제로 이동",
+    sxQuit: "테스트 나가기", sxWordMode: "단어 입력",
+    sxInMode: "답하는 방법", sxInSpeak: "말하기", sxInBlock: "단어 블록", sxInType: "키보드 입력",
+    sxTypeOnToast: "키보드 입력: 빈칸에 쓰고 Enter·Tab·스페이스로 다음 칸", sxNoAnsType: "이 문제는 파일에 영어 정답이 없어서 키보드 입력을 할 수 없어요. 말하기로 연습하세요.",
+    sxTypeRed: "빨간 칸을 눌러 다시 써 보세요", sxBlockRed: "빨간 단어를 확인해 보세요", sxSpeakRed: "빨간 칸이 정답이에요. 다시 말해 볼까요?",
+    sxGoSkipped: n => `빠진 ${n}문제로 갈게요`, sxOnlyThis: "이 문제만 남았어요", sxAllDone: "모든 문제를 다 풀었어요. 수고했어요! 🎉", sxReset: "↺ 다시", sxCheck: "확인", sxJump: "문제로 이동",
   },
   en: {
     prompt: "📋 Prompt", promptTitle: "Ask an AI to convert a script", copied: "Copied ✓", copyManually: "Please copy it manually", copyAgain: "Copy again",
@@ -149,7 +153,11 @@ export const STR = {
     sxNoAns: "no answer", sxFreeSpeak: "free speaking", sxFreeDone: "Saved what you said",
     sxNoAnsHelp: "The file has no English answer for this one. Say it your way — it isn't scored, only what you said is kept.",
     sxNoAnsWord: "The file has no English answer for this one, so word blocks can't be used. Turn word blocks off and say it.", sxNoAnsListen: "No answer sentence for this one",
-    sxQuit: "Leave the test", sxWordMode: "Word blocks", sxReset: "↺ Reset", sxCheck: "Check", sxJump: "Go to question",
+    sxQuit: "Leave the test", sxWordMode: "Word blocks",
+    sxInMode: "How to answer", sxInSpeak: "Speak", sxInBlock: "Word blocks", sxInType: "Type",
+    sxTypeOnToast: "Type: fill each blank, Enter · Tab · space for the next", sxNoAnsType: "The file has no English answer for this one, so typing can't be used. Practise it by speaking.",
+    sxTypeRed: "Tap a red box and type it again", sxBlockRed: "Check the red words", sxSpeakRed: "The red boxes show the answer. Say it again?",
+    sxGoSkipped: n => `Going to the ${n} you skipped`, sxOnlyThis: "Only this one is left", sxAllDone: "You answered every question. Well done! 🎉", sxReset: "↺ Reset", sxCheck: "Check", sxJump: "Go to question",
   },
 };
 

@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3.16.0">
+<link rel="stylesheet" href="style.css?v=3.17.0">
 </head>
 <body class="v-lib">
 
@@ -121,7 +121,7 @@
     <button class="iconbtn" id="stQuit" data-i18n-aria="sxQuit">✕</button>
     <div class="ttl" id="stTitle"></div>
     <button class="count stcount" id="stCount"></button>
-    <button class="wtoggle" id="stWordTg" role="switch" aria-checked="false"><span data-i18n="sxWordMode">단어 입력</span><i></i></button>
+    <div class="imode" id="stInMode" role="radiogroup" data-i18n-aria="sxInMode"><button data-im="speak" role="radio" data-i18n-title="sxInSpeak" data-i18n-aria="sxInSpeak">🎤</button><button data-im="block" role="radio" data-i18n-title="sxInBlock" data-i18n-aria="sxInBlock">🧩</button><button data-im="type" role="radio" data-i18n-title="sxInType" data-i18n-aria="sxInType">⌨️</button></div>
   </div>
   <div class="segbar" id="stProg"></div>
   <div class="ststage" id="stStage"></div>
@@ -257,6 +257,6 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=3.16.0"></script>
+<script type="module" src="js/app.js?v=3.17.0"></script>
 </body>
 </html>

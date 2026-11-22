@@ -4,7 +4,7 @@
 // Content is import-only: the only things typed in are numbers and titles.
 import { t, lang } from "./i18n.js";
 import { tokenize, fillWords, scoreAttempt } from "./core.js";
-import { parseChapter, itemTitle, questionsOf, slashParts, chunksOf, hintList, makeBlocks, checkBlocks, nextBlockHint, numbersFromFilename } from "./sxcore.js";
+import { parseChapter, itemTitle, questionsOf, slashParts, chunksOf, hintList, makeBlocks, checkBlocks, nextBlockHint, numbersFromFilename, typeSlots, checkTyped, nextStop } from "./sxcore.js";
 import { putFile, getFile, delFile } from "./sxstore.js";
 import { createRecognizer, speechEngine } from "./speech.js";
 import { chime, thud, tick, fanfare, unlockAudio, startConfetti, stopConfetti, say, hush, haptic } from "./fx.js";
@@ -12,7 +12,7 @@ import { chime, thud, tick, fanfare, unlockAudio, startConfetti, stopConfetti, s
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-const K = { meta: "speakup.sx.v1", best: "speakup.sxbest.v1", pos: "speakup.sxpos.v1", word: "speakup.sxword.v1", auto: "speakup.sxauto.v1", mode: "speakup.mode.v1", sess: "speakup.sxsess.v1", keep: "speakup.sxkeep.v1" };
+const K = { meta: "speakup.sx.v1", best: "speakup.sxbest.v1", pos: "speakup.sxpos.v1", word: "speakup.sxword.v1", input: "speakup.sxinput.v1", auto: "speakup.sxauto.v1", mode: "speakup.mode.v1", sess: "speakup.sxsess.v1", keep: "speakup.sxkeep.v1" };
 const ls = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { C.toast(t("sxStoreFull")); } },
@@ -21,7 +21,10 @@ let C = null;   // context from app.js: {showView, view(), toast, ask, renderLib
 let meta = ls.get(K.meta, null); if (!meta || !Array.isArray(meta.trainings)) meta = { trainings: [] };
 let best = ls.get(K.best, {});      // "chapterId|itemIndex|questionKey" → best score
 let sess = ls.get(K.sess, {});      // "chapterId|itemIndex" → unfinished run {pos, res:{qi: score}, start} (이어서)
-let wordMode = ls.get(K.word, false), autoNext = ls.get(K.auto, true), keepOn = ls.get(K.keep, false);
+// input mode: "speak" (default) | "block" (word blocks) | "type" (keyboard into the blanks); v3.16 stored a boolean in sxword
+let inMode = ls.get(K.input, ls.get(K.word, false) ? "block" : "speak"); if (!["speak", "block", "type"].includes(inMode)) inMode = "speak";
+let wordMode = inMode !== "speak", blockMode = inMode === "block", typeMode = inMode === "type";
+let autoNext = ls.get(K.auto, true), keepOn = ls.get(K.keep, false);
 const saveMeta = () => ls.set(K.meta, meta);
 const cache = new Map();            // chapterId → parsed chapter (loaded into memory once)
 const transition = fn => (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) ? document.startViewTransition(fn) : fn();
@@ -54,9 +57,10 @@ async function loadChapter(ch) {
   const raw = await getFile(ch.id); if (raw == null) throw new Error("missing");
   const parsed = parseChapter(raw); cache.set(ch.id, parsed); return parsed;
 }
-const ring = (pct, label) => {
-  const r = 17, c = 2 * Math.PI * r, p = pct == null ? 0 : pct;
-  return `<span class="ring ${pct == null ? "none" : p >= 80 ? "g" : p >= 50 ? "m" : "l"}"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="${r}" class="rb"/><circle cx="20" cy="20" r="${r}" class="rf" stroke-dasharray="${c * p / 100} ${c}"/></svg><b>${label ?? (pct == null ? "–" : pct)}</b></span>`;
+// progress ring (answered / total) — no numbers: scores are not the point (owner, v3.17)
+const ring = (done, total) => {
+  const r = 17, c = 2 * Math.PI * r, p = total ? done / total : 0;
+  return `<span class="ring ${!done ? "none" : ""}"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="${r}" class="rb"/><circle cx="20" cy="20" r="${r}" class="rf" stroke-dasharray="${c * p} ${c}"/></svg><b class="${p >= 1 ? "ck" : ""}">${p >= 1 ? "✓" : ""}</b></span>`;
 };
 
 /* ================= library tab: 훈련 list ================= */
@@ -129,7 +133,7 @@ async function renderSx() {
         let tot = 0, done = 0; units.forEach(([it, i]) => { const s = itemStats(c.id, i, it); tot += s.total; done += s.done; });
         const m = body.querySelector(`[data-cmeta="${c.id}"]`), r = body.querySelector(`[data-cring="${c.id}"]`);
         if (m) m.textContent = t("sxChapterMeta", units.length, done, tot);
-        if (r) r.innerHTML = ring(tot ? Math.round(done / tot * 100) : null, tot ? Math.round(done / tot * 100) + "%" : "");
+        if (r) r.innerHTML = tot ? ring(done, tot) : "";
       }).catch(() => { const m = body.querySelector(`[data-cmeta="${c.id}"]`); if (m) m.textContent = t("sxFileMissing"); });
     }
   } else if (l === "chapter") {
@@ -141,12 +145,12 @@ async function renderSx() {
       if (it.kind === "unit") {
         const s = itemStats(ch.id, i, it);
         return `<div class="ucard" data-it="${i}"><div class="ucard-h"><span class="ubadge">${esc(it.no)}</span><span class="ufocus">${esc(it.focus)}</span></div>
-          <div class="ucard-ko">${esc(it.ko)}</div><div class="ucard-f"><span>${t("sxQCount", s.total)}${s.done ? ` · ${t("sxDoneN", s.done)}` : ""}</span>${ring(s.avg)}</div></div>`;
+          <div class="ucard-ko">${esc(it.ko)}</div><div class="ucard-f"><span>${t("sxQCount", s.total)}${s.done ? ` · ${t("sxDoneN", s.done)}` : ""}</span>${ring(s.done, s.total)}</div></div>`;
       }
       if (it.kind === "tips") return `<div class="ucard tips" data-it="${i}"><div class="ucard-h"><span class="ubadge tip">💡 WRITING TIPS</span></div><div class="ucard-ko">${esc(it.topic)}</div></div>`;
       const s = itemStats(ch.id, i, it);
       return `<div class="ucard story" data-it="${i}"><div class="ucard-h"><span class="ubadge story">📖 LET'S WRITE A STORY</span></div><div class="ucard-ko">${esc(it.title)}</div>
-        <div class="ucard-f"><span>${t("sxStoryLines", it.prompts.length)}${s.done ? ` · ${t("sxDoneN", s.done)}` : ""}</span>${s.total ? ring(s.avg) : ""}</div></div>`;
+        <div class="ucard-f"><span>${t("sxStoryLines", it.prompts.length)}${s.done ? ` · ${t("sxDoneN", s.done)}` : ""}</span>${s.total ? ring(s.done, s.total) : ""}</div></div>`;
     }).join("");
     body.querySelectorAll("[data-it]").forEach(c => c.onclick = () => { nav.it = +c.dataset.it; go(); });
   } else {
@@ -161,7 +165,8 @@ const hintChips = hs => hs.length ? `<div class="hchips">${hs.map(h => `<span cl
 const slashHTML = s => slashParts(s).map(esc).join(`<i class="sl">/</i>`);
 const chunkHTML = cs => cs.length ? `<div class="chunks">${cs.map(c => `<span>${esc(c)}</span>`).join(`<i>+</i>`)}</div>` : "";
 const noAnsTag = () => `<span class="noans">${t("sxNoAns")}</span>`;
-const bsHTML = v => `<span class="bs ${v === 100 ? "p" : ""}">${v != null ? v + "%" : ""}</span>`;
+// per-question mark: ✓ said/typed it all right once, • tried (no numbers)
+const bsHTML = v => `<span class="bs ${v === 100 ? "p" : v != null ? "t" : ""}">${v === 100 ? "✓" : v != null ? "•" : ""}</span>`;
 function startButtons(cid, ii, n) {
   if (!n) return "";
   const ss = sess[`${cid}|${ii}`], done = ss ? Object.keys(ss.res || {}).length : 0;
@@ -174,7 +179,7 @@ function unitHTML(cid, ii, u) {
   const s = itemStats(cid, ii, u);
   return `<div class="uhero"><div class="ucard-h"><span class="ubadge">${esc(u.no)}</span><span class="ufocus">${esc(u.focus)}</span></div>
       <div class="uhero-ko">${esc(u.ko)}</div>${chunkHTML(chunksOf(u.core))}</div>
-    <div class="stats"><div class="stat"><b>${s.total}</b><span>${t("sxQuestions")}</span></div><div class="stat"><b>${s.done}</b><span>${t("sxTried")}</span></div><div class="stat"><b>${s.avg != null ? s.avg + "%" : "–"}</b><span>${t("sxAvg")}</span></div></div>
+    <div class="stats"><div class="stat"><b>${s.total}</b><span>${t("sxQuestions")}</span></div><div class="stat"><b>${s.done}</b><span>${t("sxTried")}</span></div></div>
     ${startButtons(cid, ii, qs.length)}
     <h3 class="sxh"><span class="sec s1">STEP 1</span>${t("sxSecSteps")}</h3>
     <ul class="tl qtl">${u.steps.map((st, i) => `<li role="button" tabindex="0" data-q="${idxOf("s1:" + i)}"><span class="no">${i + 1}</span><div class="tx"><div class="te">${slashHTML(st.ko)}</div>${hintChips(hintList(st.hint))}</div>${bsHTML(b("s1:" + i))}</li>`).join("")}</ul>
@@ -313,6 +318,7 @@ function openForm({ title, fields, submit, onSubmit, onDelete, onFile }) {
 /* ================= TEST (one question per page) ================= */
 let S = null;          // {cid, ii, item, qs, order, pos, res, start, round}
 let W = {};            // qi → word-mode state {blocks, answerKeys, placed:[block pos], checked, result}
+let T = {};            // qi → typing state {slots, vals, ok (locked green), bad (red), done}
 let keep = {};         // qi → Set of filled word indices (speaking; retries never un-fill)
 let filled = new Set(), liveSt = null, hintLv = 0, autoT = null, silenceT = null, resultShown = false;
 const qOf = () => S.qs[S.order[S.pos]], qiOf = () => S.order[S.pos];
@@ -341,7 +347,7 @@ function startTest(at = 0, how = "new", order = null) {
   if (saved) { Object.entries(saved.res || {}).forEach(([qi, sc]) => { if (qs[qi]) S.res[qi] = { kind: "saved", score: sc }; }); S.start = saved.start || S.start; }
   if (how === "new" && !order) { delete sess[key]; ls.set(K.sess, sess); }
   S.pos = Math.max(0, Math.min(S.order.length - 1, order ? 0 : how === "resume" && saved ? saved.pos : at));
-  W = {}; keep = {}; resultShown = false;
+  W = {}; T = {}; keep = {}; resultShown = false; S.sweep = false;
   $("stTitle").textContent = it.kind === "unit" ? `${it.no} · ${it.focus}` : itemTitle(it);
   $("stResult").classList.remove("show");
   transition(() => { C.showView("st"); paintMode(); renderQ(0); });
@@ -358,11 +364,11 @@ function quitTest() {
 }
 
 function paintMode() {
-  $("stView").classList.toggle("wordmode", wordMode);
-  $("stWordTg").setAttribute("aria-checked", wordMode); $("stWordTg").classList.toggle("on", wordMode);
+  $("stView").classList.toggle("wordmode", wordMode); $("stView").classList.toggle("typemode", typeMode);
+  $("stInMode").querySelectorAll("[data-im]").forEach(b => { const on = b.dataset.im === inMode; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
   $("stAutoBtn").classList.toggle("on", autoNext);
 }
-const scoreCls = r => !r ? "" : r.score == null ? "f" : r.score === 100 ? "g" : r.score >= 50 ? "m" : "l";
+const scoreCls = r => !r ? "" : r.score == null ? "f" : r.score === 100 ? "g" : "m";   // all right / tried (no score levels)
 function paintProg() {
   $("stCount").textContent = `${S.pos + 1}/${S.order.length}`;
   $("stProg").innerHTML = S.order.map((qi, k) => { const r = S.res[qi];
@@ -375,7 +381,7 @@ function renderQ(dir) {
   filled = new Set(keep[qi] || []);
   saveSess();
   const prev = S.pos > 0 ? S.qs[S.order[S.pos - 1]] : null;
-  const intro = dir > 0 && prev && prev.sec !== q.sec ? `<div class="secintro">🎉 ${t("sxSecDone", secName(prev.sec))} <b>${t("sxSecNext", secName(q.sec))}</b></div>` : "";
+  const intro = dir > 0 && !S.sweep && prev && prev.sec !== q.sec ? `<div class="secintro">🎉 ${t("sxSecDone", secName(prev.sec))} <b>${t("sxSecNext", secName(q.sec))}</b></div>` : "";
   const card = `<div class="qcard ${dir > 0 ? "in-r" : dir < 0 ? "in-l" : "in"}">${intro}
       <div class="qtop"><span class="sec ${q.sec}">${esc(secLabel(q))}</span>${q.derived ? `<span class="qnote">${t("sxBuildUp")}</span>` : ""}${q.noAnswer ? `<span class="qnote">${t("sxFreeSpeak")}</span>` : ""}${bsHTML(best[bestKey(S.cid, S.ii, q)])}</div>
       <div class="qko">${q.parts.length > 1 ? q.parts.map((p, i) => `<span class="${i === q.parts.length - 1 ? "new" : ""}">${esc(p)}</span>`).join(`<i class="sl">/</i>`) : esc(q.ko)}</div>
@@ -389,21 +395,24 @@ function renderQ(dir) {
   paintProg(); paintMic(); updateHint();
   paintResultPill(r);
   if (rec.listening && !wordMode && !r) live({ finalText: "", interim: "", parts: [] });   // keep mode: still listening on the new question
+  if (typeMode && !q.noAnswer && !tstate(qi).done && matchMedia("(hover: hover) and (pointer: fine)").matches) focusSlot(firstOpen(tstate(qi)));   // desktop: ready to type
 }
 const secName = sec => sec === "s1" ? `STEP 1 · ${t("sxSecSteps")}` : sec === "var" ? t("sxSecVarShort") : sec === "s2" ? "STEP 2" : "STORY";
 function paintResultPill(r) {
   const el = $("stResPill");
   if (!r) { el.className = "result"; return; }
   if (r.score == null) { el.innerHTML = `<span>🗣 ${t("sxFreeDone")}</span>`; el.className = "result show free"; return; }
-  const [cls, title] = r.score === 100 ? ["good", "Perfect! 🎉"] : r.score >= 80 ? ["good", "Great!"] : r.score >= 50 ? ["mid", "Good try!"] : ["low", "One more time!"];
-  el.innerHTML = `<span class="score">${r.score}%</span><span>${title} <span class="sub">${esc(r.sub || "")}</span></span>`;
-  el.className = "result show " + cls;
+  // no numbers — just a friendly word; red marks show what to look at
+  const msg = r.score === 100 ? "Perfect! 🎉" : r.kind === "type" ? t("sxTypeRed") : r.kind === "word" ? t("sxBlockRed") : t("sxSpeakRed");
+  el.innerHTML = `<span>${msg}</span>`;
+  el.className = "result show " + (r.score === 100 ? "good" : "mid");
 }
 
 /* ---- answer area: speaking (masked word slots) or word blocks ---- */
 function paintAnswer() {
   const q = qOf(), qi = qiOf(), el = $("stAns"); if (!el) return;
-  if (wordMode) { paintBlocks(); return; }
+  if (typeMode) { paintType(); return; }
+  if (blockMode) { paintBlocks(); return; }
   if (q.noAnswer) {
     const r = S.res[qi];
     el.innerHTML = `<div class="freebox">${t("sxNoAnsHelp")}</div><div class="heard" id="stHeard">${r && r.said ? `<span class="label">${t("youSaid")}</span>${esc(r.said)}` : `<span class="ph">${speechEngine() ? t("sxSayIt") : t("errUnsupported")}</span>`}</div>`;
@@ -465,8 +474,7 @@ function evaluate(said, parts, interim) {
   if (q.noAnswer) { record(q, qi, { kind: "free", score: null, said }); paintAnswer(); return; }
   const r = scoreAttempt(q.en, said, [...parts, interim], [...filled]);
   keep[qi] = new Set(r.st.map((s, k) => s === "ok" ? k : -1).filter(k => k >= 0));
-  const parts2 = [t("blanks", r.ok, r.total)]; if (r.bad) parts2.push(t("wrongN", r.bad)); if (r.miss) parts2.push(t("missedN", r.miss));
-  record(q, qi, { kind: "speak", score: r.score, st: r.st, said: r.said, sub: parts2.join(" · "),
+  record(q, qi, { kind: "speak", score: r.score, st: r.st, said: r.said,
     heardHTML: `<span class="label">${t("youSaid")}</span>` + r.heard.map(h => `<span class="h ${h.st}">${esc(h.w)}</span>`).join(" ") });
   hintLv = 0; updateHint(); paintAnswer();
 }
@@ -475,12 +483,12 @@ function record(q, qi, res) {
   if (res.score == null) { paintResultPill(res); paintProg(); saveSess(); haptic(15); return; }   // free speaking: nothing to score
   const k = bestKey(S.cid, S.ii, q); if (best[k] == null || res.score > best[k]) { best[k] = res.score; ls.set(K.best, best); }
   paintResultPill(res); paintProg();
-  if (res.score === 100) { chime(); haptic(20); } else if (res.kind === "word") { thud(); haptic([10, 40, 10]); }
+  if (res.score === 100) { chime(); haptic(20); } else if (res.kind === "word" || res.kind === "type") { thud(); haptic([10, 40, 10]); }
   const top = $("stStage").querySelector(".qtop .bs"); if (top) top.outerHTML = bsHTML(best[k]);
   saveSess();
   clearTimeout(autoT);
   if (res.score === 100 && rec.listening && keepOn) {
-    if (S.pos === S.order.length - 1) rec.stop(true);             // end of the unit: mic off
+    if (!pendingOthers()) rec.stop(true);                         // nothing left to answer: mic off
     else if (autoNext) rec.gate(true);                            // ignore speech until the next question is up
   }
   if (autoNext && res.score === 100) autoT = setTimeout(() => { if (S && qiOf() === qi) nextQ(); else rec.gate(false); }, 1300);
@@ -521,7 +529,7 @@ function unplace(k) { const s = wstate(qiOf()); if (s.checked) return; s.placed.
 let dr = null, drDone = 0;
 const inside = (el, x, y) => { if (!el) return false; const r = el.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; };
 function drDown(e) {
-  if (!S || !wordMode || (e.pointerType === "mouse" && e.button !== 0)) return;
+  if (!S || !blockMode || (e.pointerType === "mouse" && e.button !== 0)) return;
   const b = e.target.closest(".blk[data-pool],.blk[data-tray]"); if (!b || b.disabled || b.classList.contains("used")) return;
   if (wstate(qiOf()).checked) return;
   drEnd();
@@ -570,7 +578,7 @@ function drEnd() {
 function checkWord() {
   const q = qOf(), qi = qiOf(), s = wstate(qi); if (s.checked || s.placed.length !== s.blocks.length) return;
   s.result = checkBlocks(s.answerKeys, s.placed.map(p => s.blocks[p].key)); s.checked = true;
-  record(q, qi, { kind: "word", score: s.result.score, sub: t("sxRightPos", s.result.right, s.result.total) });
+  record(q, qi, { kind: "word", score: s.result.score });
   paintBlocks();
 }
 function resetWord() {
@@ -587,6 +595,82 @@ function wordHint() {
   s.glow = s.blocks.findIndex((b, i) => b.key === h.key && !s.placed.includes(i)); paintBlocks();
 }
 
+/* ---- 타자 입력: type each word into its blank ----
+ * Enter / Tab / space → next blank; when every blank is filled it checks by itself: right words turn green
+ * and lock, wrong ones turn red. Putting the cursor in a blank clears it (type it fresh) and lifts its red mark;
+ * the other words stay as they were, so you carry on from there. No score — just green / red. */
+function tstate(qi) {
+  if (!T[qi]) T[qi] = { slots: typeSlots(S.qs[qi].en), vals: [], ok: [], bad: [], done: false };
+  return T[qi];
+}
+const tph = w => hintLv === 2 ? w : hintLv === 1 ? w.slice(0, 1) : "";
+const twidth = (w, v) => Math.max(w.length, (v || "").length, 2) + 1.2;
+// first blank still to do: empty or red (‑1 = none)
+const firstOpen = s => s.slots.findIndex((_, k) => !s.ok[k] && (!s.vals[k] || s.bad[k]));
+function paintType() {
+  const q = qOf(), qi = qiOf(), el = $("stAns"), btn = $("stCheck");
+  if (q.noAnswer) { el.innerHTML = `<div class="freebox">${t("sxNoAnsType")}</div>`; btn.disabled = true; btn.classList.remove("next"); return; }
+  const s = tstate(qi);
+  el.innerHTML = `<div class="en typed" id="stTyped">${s.slots.map((sl, k) => `<span class="tw">${esc(sl.lead)}<input class="tin ${s.ok[k] ? "ok" : s.bad[k] ? "bad" : ""}" data-t="${k}" value="${esc(s.vals[k] || "")}"${s.ok[k] ? ` readonly tabindex="-1"` : ""} placeholder="${esc(tph(sl.word))}" style="width:${twidth(sl.word, s.vals[k])}ch" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" aria-label="${k + 1}">${esc(sl.tail)}</span>`).join("")}</div>
+    ${s.done ? answerLine(q) : ""}`;
+  btn.disabled = false; btn.classList.toggle("next", s.done);
+}
+function focusSlot(k) { const el = k >= 0 && $("stStage").querySelector(`.tin[data-t="${k}"]`); if (el) el.focus(); }
+// Enter / Tab / space in blank k: go to the next blank still to do, or check when all are filled
+function tAdvance(k, dir = 1) {
+  const s = tstate(qiOf()), n = s.slots.length;
+  if (dir < 0) { for (let d = 1; d < n; d++) { const p = (k - d + n) % n; if (!s.ok[p]) { focusSlot(p); return; } } return; }
+  for (let d = 1; d < n; d++) { const p = (k + d) % n; if (!s.ok[p] && (!s.vals[p] || s.bad[p])) { focusSlot(p); return; } }
+  if (firstOpen(s) < 0) checkType();
+}
+function checkType() {
+  const q = qOf(), qi = qiOf(), s = tstate(qi); if (q.noAnswer || firstOpen(s) >= 0) return;
+  const r = checkTyped(s.slots.map(x => x.word), s.vals);
+  r.ok.forEach((o, k) => { s.ok[k] = s.ok[k] || o; s.bad[k] = !o; });
+  s.done = r.ok.every(Boolean);
+  const a = document.activeElement; if (a && a.classList && a.classList.contains("tin")) a.blur();
+  paintType();
+  record(q, qi, { kind: "type", score: r.score });
+}
+function typeHint() {
+  if (qOf().noAnswer) return;
+  hintLv = (hintLv + 1) % 3; updateHint();
+  const s = tstate(qiOf());
+  $("stStage").querySelectorAll(".tin").forEach(el => { el.placeholder = tph(s.slots[+el.dataset.t].word); });
+}
+function resetType() {
+  const qi = qiOf(); delete T[qi];
+  if (S.res[qi] && S.res[qi].kind === "type") { delete S.res[qi]; paintResultPill(null); paintProg(); }
+  paintType(); focusSlot(0);
+}
+function typeEvents(stage) {
+  const slotOf = e => e.target.classList && e.target.classList.contains("tin") && S && typeMode ? +e.target.dataset.t : -1;
+  stage.addEventListener("focusin", e => {
+    const k = slotOf(e); if (k < 0) return;
+    const s = tstate(qiOf()); if (s.ok[k]) return;
+    s.vals[k] = ""; e.target.value = ""; s.bad[k] = false; e.target.classList.remove("bad");   // touch a blank = type it fresh
+    e.target.style.width = twidth(s.slots[k].word, "") + "ch";
+  });
+  stage.addEventListener("input", e => {
+    const k = slotOf(e); if (k < 0) return;
+    const s = tstate(qiOf()); if (s.ok[k]) return;
+    let v = e.target.value;
+    if (/\s/.test(v)) {   // a space (mobile keyboards) = next blank
+      v = v.trim().split(/\s+/)[0] || ""; e.target.value = v; s.vals[k] = v;
+      if (v) { tAdvance(k); return; }
+    }
+    s.vals[k] = v; e.target.style.width = twidth(s.slots[k].word, v) + "ch";
+  });
+  stage.addEventListener("keydown", e => {
+    const k = slotOf(e); if (k < 0) return;
+    if (e.key === "Enter" || e.key === "Tab" || e.key === " ") {
+      if (e.isComposing) return;
+      e.preventDefault(); unlockAudio();
+      tAdvance(k, e.key === "Tab" && e.shiftKey ? -1 : 1);
+    } else if (e.key === "Escape") e.target.blur();
+  });
+}
+
 /* ---- controls ---- */
 function paintMic() {
   const m = $("stMic"), on = rec.listening;
@@ -597,7 +681,8 @@ function paintMic() {
 }
 function updateHint() {
   const b = $("stHint");
-  if (wordMode) { b.textContent = t("hint0"); b.classList.remove("on"); return; }
+  if (typeMode) { const w = $("stHintW"); w.textContent = t("hint" + hintLv); w.classList.toggle("on", hintLv > 0); return; }
+  if (blockMode) { $("stHintW").textContent = t("hint0"); $("stHintW").classList.remove("on"); return; }
   b.textContent = t("hint" + hintLv); b.classList.toggle("on", hintLv > 0);
 }
 // Leaving a question: normal mode drops the mic; 유지 keeps the session and starts a fresh capture.
@@ -607,46 +692,33 @@ function leaveQ() {
   if (keepOn && !wordMode) { rec.reset(); rec.gate(false); cur = { finalText: "", interim: "", parts: [] }; }
   else rec.stop(true);
 }
+// Questions still to answer (free-speaking ones without an answer are optional).
+const pendAt = k => { const qi = S.order[k]; return !S.res[qi] && !S.qs[qi].noAnswer; };
+const pendingOthers = () => S.order.some((_, k) => k !== S.pos && pendAt(k));
+// › : in order until the last question, then round the skipped ones (S.sweep) until none is left → 🏆
 function nextQ() {
+  const st = nextStop(S.order.length, S.pos, S.order.map((_, k) => pendAt(k)), S.sweep);
+  if (st.stay) { C.toast(t("sxOnlyThis")); return; }
   leaveQ();
-  if (S.pos < S.order.length - 1) { S.pos++; renderQ(1); }
-  else if (Object.keys(S.res).length) showResult();
-  else C.toast(t("sxLastQ"));
+  if (st.done) { showResult(); return; }
+  if (st.entered) C.toast(t("sxGoSkipped", S.order.filter((_, k) => pendAt(k)).length));
+  S.sweep = st.sweep; S.pos = st.to; renderQ(1);
 }
 function prevQ() { leaveQ(); if (S.pos > 0) { S.pos--; renderQ(-1); } }
 function jump(k) { leaveQ(); const d = k - S.pos; S.pos = k; renderQ(Math.sign(d)); }
 
+// Every question answered → 🏆 + confetti + fanfare. No scores (owner: the point is to enjoy it and move on).
 function showResult() {
   stopTest(true); resultShown = true;
-  const done = S.order.map(qi => S.res[qi]).filter(Boolean), n = S.order.length;
-  const scored = done.filter(r => r.score != null), nScored = S.order.filter(qi => !S.qs[qi].noAnswer).length;
-  const avg = scored.length ? Math.round(scored.reduce((a, r) => a + r.score, 0) / scored.length) : 0;
-  const perfect = scored.filter(r => r.score === 100).length, secs = Math.round((Date.now() - S.start) / 1000);
-  const misses = S.order.filter(qi => !S.qs[qi].noAnswer && (!S.res[qi] || S.res[qi].score < 100));
-  const left = S.order.filter(qi => !S.res[qi]), complete = !left.length;
-  if (complete && S.round === 1) { delete sess[`${S.cid}|${S.ii}`]; ls.set(K.sess, sess); }   // unit done through STEP 2 → next 테스트 starts fresh
-  const secs2 = ["s1", "var", "s2", "story"].map(sec => { const qis = S.order.filter(qi => S.qs[qi].sec === sec); if (!qis.length) return "";
-    const sq = qis.filter(qi => !S.qs[qi].noAnswer); if (!sq.length) return "";
-    const sc = sq.map(qi => S.res[qi] && S.res[qi].score != null ? S.res[qi].score : 0), a = Math.round(sc.reduce((x, y) => x + y, 0) / sq.length);
-    return `<div class="rsec"><span class="sec ${sec}">${sec === "var" ? t("sxSecVarShort") : SEC[sec]}</span><i><b style="width:${a}%"></b></i><span>${a}%</span></div>`; }).join("");
-  const [icon, head] = !complete ? ["📝", t("sxPartial")] : S.round > 1 ? ["🔁", t("sxRetryDone")] : ["🏆", t("sxUnitDone")];
-  $("stResBody").innerHTML = `<div class="fin-trophy ${complete ? "" : "plain"}">${icon}</div>
-    <h1 class="fin-title ${complete ? "" : "partial"}">${head}</h1><div class="fin-dlg">${esc($("stTitle").textContent)}${complete ? "" : ` · ${t("sxLeftN", left.length)}`}</div>
-    <div class="fin-score">${avg}%</div><div class="fin-score-l">${t("finAvg")}</div>
-    <div class="fin-stats"><div><b>${perfect}/${nScored}</b><span>${t("finPerfect")}</span></div><div><b>${done.length}/${n}</b><span>${t("sxAnswered")}</span></div><div><b>${t("minSec", Math.floor(secs / 60), secs % 60)}</b><span>${t("finTime")}</span></div></div>
-    <div class="rsecs">${secs2}</div>
-    <ul class="rlist">${S.order.map((qi, k) => { const q = S.qs[qi], r = S.res[qi];
-      return `<li data-k="${k}"><span class="sec ${q.sec}">${esc(secLabel(q))}</span><div class="rq"><div class="rko">${esc(q.ko)}</div><div class="ren">${esc(q.raw || (r && r.said) || "")}</div></div>${r && r.score == null ? `<span class="badge f">🗣</span>` : r ? `<span class="badge ${r.score >= 80 ? "g" : r.score >= 50 ? "m" : "l"}">${r.score}%</span>` : `<span class="badge">–</span>`}</li>`; }).join("")}</ul>
-    <div class="rbtns">${!complete ? `<button class="btn pri" id="stLeft">▶ ${t("sxDoLeft", left.length)}</button>`
-        : misses.length ? `<button class="btn pri" id="stRetry">↻ ${t("sxRetryMissed", misses.length)}</button>` : ""}
-      <button class="btn sec" id="stAgain">${t("sxAgain")}</button><button class="btn ${complete && !misses.length ? "pri" : "sec"}" id="stFinDone">${t("finDone")}</button></div>`;
+  if (S.round === 1) { delete sess[`${S.cid}|${S.ii}`]; ls.set(K.sess, sess); }   // done → next 테스트 starts fresh
+  $("stResBody").innerHTML = `<div class="fin-trophy">🏆</div>
+    <h1 class="fin-title">${t("sxUnitDone")}</h1><div class="fin-dlg">${esc($("stTitle").textContent)}</div>
+    <p class="fin-msg">${t("sxAllDone")}</p>
+    <div class="rbtns"><button class="btn sec" id="stAgain">${t("sxAgain")}</button><button class="btn pri" id="stFinDone">${t("finDone")}</button></div>`;
   $("stResult").classList.add("show"); $("stResult").scrollTop = 0;
-  $("stResBody").querySelectorAll("[data-k]").forEach(li => li.onclick = () => { $("stResult").classList.remove("show"); jump(+li.dataset.k); });
-  if ($("stLeft")) $("stLeft").onclick = () => { $("stResult").classList.remove("show"); jump(S.order.indexOf(left[0])); };
-  if ($("stRetry")) $("stRetry").onclick = () => { const o = misses; $("stResult").classList.remove("show"); stopConfetti($("stConfetti")); startTest(0, "new", o); };
   $("stAgain").onclick = () => { $("stResult").classList.remove("show"); stopConfetti($("stConfetti")); startTest(0, "new"); };
   $("stFinDone").onclick = () => { $("stResult").classList.remove("show"); quitTest(); };
-  if (complete) { fanfare(); startConfetti($("stConfetti")); }
+  fanfare(); startConfetti($("stConfetti"));
 }
 function openGrid() {
   $("stGridBody").innerHTML = S.order.map((qi, k) => { const r = S.res[qi], q = S.qs[qi];
@@ -673,11 +745,17 @@ export function initSx(ctx) {
   $("stQuit").onclick = quitTest;
   $("stCount").onclick = openGrid;
   $("stGrid").addEventListener("click", e => { if (e.target.id === "stGrid" || e.target.id === "stGridClose") $("stGrid").classList.remove("show"); });
-  $("stWordTg").onclick = () => {
+  $("stInMode").addEventListener("click", e => {
+    const b = e.target.closest("[data-im]"); if (!b || b.dataset.im === inMode) return;
     if (rec.listening) rec.stop(true);
-    wordMode = !wordMode; ls.set(K.word, wordMode); paintMode(); updateHint(); paintAnswer(); paintResultPill(S && S.res[qiOf()]);
-    C.toast(wordMode ? t("sxWordOnToast") : t("sxWordOffToast"));
-  };
+    drEnd(); inMode = b.dataset.im; ls.set(K.input, inMode);
+    wordMode = inMode !== "speak"; blockMode = inMode === "block"; typeMode = inMode === "type";
+    hintLv = 0; paintMode(); updateHint(); if (!S) return;
+    paintAnswer(); paintResultPill(S.res[qiOf()]);
+    C.toast(t(typeMode ? "sxTypeOnToast" : blockMode ? "sxWordOnToast" : "sxWordOffToast"));
+    if (typeMode) focusSlot(firstOpen(tstate(qiOf())));
+  });
+  typeEvents($("stStage"));
   $("stMic").onclick = () => {
     unlockAudio(); if (!S) return;
     if (rec.listening) { rec.stop(); return; }
@@ -691,14 +769,19 @@ export function initSx(ctx) {
   $("stHint").onclick = () => { if (wordMode) { wordHint(); return; } if (qOf().noAnswer) return; hintLv = (hintLv + 1) % 3; updateHint(); paintAnswer(); };
   [$("stPlay"), $("stPlayW")].forEach(b => b.onclick = () => { if (qOf().noAnswer) { C.toast(t("sxNoAnsListen")); return; } if (rec.listening) rec.stop(true); say(qOf().en); });
   $("stAutoBtn").onclick = () => { autoNext = !autoNext; ls.set(K.auto, autoNext); paintMode(); };
-  $("stReset").onclick = () => { if (!qOf().noAnswer) resetWord(); }; $("stHintW").onclick = wordHint;
-  $("stCheck").onclick = () => { unlockAudio(); const s = wstate(qiOf()); if (s.checked) nextQ(); else checkWord(); };
+  $("stReset").onclick = () => { if (qOf().noAnswer) return; typeMode ? resetType() : resetWord(); };
+  $("stHintW").onclick = () => typeMode ? typeHint() : wordHint();
+  $("stCheck").onclick = () => {
+    unlockAudio(); if (qOf().noAnswer) return;
+    if (typeMode) { const s = tstate(qiOf()); if (s.done) nextQ(); else { const k = firstOpen(s); k < 0 ? checkType() : focusSlot(k); } return; }
+    const s = wstate(qiOf()); if (s.checked) nextQ(); else checkWord();
+  };
   ["stPrev", "stPrevW"].forEach(id => $(id).onclick = prevQ);
   ["stNext", "stNextW"].forEach(id => $(id).onclick = () => { unlockAudio(); nextQ(); });
   // horizontal swipe on the question = previous / next
   // word blocks: tap = place / take back (ignored right after a drag); hold = drag (see drDown)
   $("stStage").addEventListener("click", e => {
-    if (!S || !wordMode || Date.now() - drDone < 450) return;
+    if (!S || !blockMode || Date.now() - drDone < 450) return;
     const p = e.target.closest("[data-pool]"), tr = e.target.closest("[data-tray]");
     if (p && !p.disabled) placeBlock(+p.dataset.pool); else if (tr) unplace(+tr.dataset.tray);
   });

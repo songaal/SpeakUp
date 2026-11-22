@@ -169,3 +169,28 @@ export function numbersFromFilename(name) {
   const s = String(name), p = s.match(/part\s*[-_ ]?\s*(\d+)/i), c = s.match(/ch(?:apter)?\s*[-_ ]?\s*(\d+)/i);
   return { part: p ? +p[1] : null, chapter: c ? +c[1] : null };
 }
+
+/* ---------------- 타자 입력 (typing) mode ----------------
+ * One blank per answer word; punctuation around the word stays outside the blank. Checking ignores case,
+ * apostrophes and the punctuation the learner might type. */
+export function typeSlots(answer) {
+  return str(answer).split(/\s+/).filter(Boolean).map(w => {
+    const core = blockText(w), at = w.indexOf(core);
+    return at < 0 ? { lead: "", word: core, tail: "" } : { lead: w.slice(0, at), word: core, tail: w.slice(at + core.length) };
+  });
+}
+export const typedKey = s => blockKey(blockText(String(s).trim())).replace(/'/g, "");
+export function checkTyped(words, vals) {
+  const ok = words.map((w, i) => !!(vals[i] && typedKey(vals[i]) === typedKey(w)));
+  const right = ok.filter(Boolean).length;
+  return { ok, right, total: words.length, score: words.length ? Math.round(right / words.length * 100) : 0 };
+}
+
+/* ---------------- where › goes ----------------
+ * Sequential until the last question; from there (and from then on, "sweep") it visits the questions still
+ * pending (unanswered), cycling. pend[pos] = still to answer. → {to, sweep, entered} | {done} | {stay} */
+export function nextStop(n, pos, pend, sweep = false) {
+  if (!sweep && pos < n - 1) return { to: pos + 1, sweep: false };
+  for (let d = 1; d < n; d++) { const p = (pos + d) % n; if (pend[p]) return { to: p, sweep: true, entered: !sweep }; }
+  return pend[pos] ? { stay: true } : { done: true };
+}
