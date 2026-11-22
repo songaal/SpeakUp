@@ -467,3 +467,13 @@
   .tl .bs.t{color:var(--orange)}
   .ring b.ck{color:var(--green-d);font-size:15px}
   .fin-msg{font-weight:800;color:var(--muted);font-size:15px;margin:4px 0 26px}
+  /* v3.18: 🔊 next to the question, floating round 💡 / ↺ above the dock (blocks + typing) */
+  .qplay{flex:none;width:40px;height:40px;border-radius:50%;border:2px solid #84D8FF;border-bottom-width:4px;background:var(--blue-l);color:var(--blue-d);display:grid;place-items:center;cursor:pointer;padding:0}
+  .qplay svg{width:22px;height:22px}
+  .qplay:active{transform:translateY(2px);border-bottom-width:2px}
+  #stView .dock{position:relative}
+  .fbtns{position:absolute;right:16px;bottom:calc(100% + 12px);display:flex;gap:10px;z-index:5}
+  .fbtn{width:52px;height:52px;border-radius:50%;border:2px solid var(--line);border-bottom-width:4px;background:#fff;font:inherit;font-size:22px;font-weight:900;color:var(--muted);display:grid;place-items:center;cursor:pointer;padding:0;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+  .fbtn:active{transform:translateY(2px);border-bottom-width:2px}
+  .fbtn.on{border-color:#84D8FF;background:var(--blue-l)}
+  #stView.wordmode .ststage{padding-bottom:84px}

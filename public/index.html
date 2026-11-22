@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3.17.0">
+<link rel="stylesheet" href="style.css?v=3.18.0">
 </head>
 <body class="v-lib">
 
@@ -121,7 +121,7 @@
     <button class="iconbtn" id="stQuit" data-i18n-aria="sxQuit">✕</button>
     <div class="ttl" id="stTitle"></div>
     <button class="count stcount" id="stCount"></button>
-    <div class="imode" id="stInMode" role="radiogroup" data-i18n-aria="sxInMode"><button data-im="speak" role="radio" data-i18n-title="sxInSpeak" data-i18n-aria="sxInSpeak">🎤</button><button data-im="block" role="radio" data-i18n-title="sxInBlock" data-i18n-aria="sxInBlock">🧩</button><button data-im="type" role="radio" data-i18n-title="sxInType" data-i18n-aria="sxInType">⌨️</button></div>
+    <div class="imode" id="stInMode" role="radiogroup" data-i18n-aria="sxInMode"><button data-im="speak" role="radio" data-i18n-title="sxInSpeak" data-i18n-aria="sxInSpeak">🎤</button><button data-im="type" role="radio" data-i18n-title="sxInType" data-i18n-aria="sxInType">⌨️</button><button data-im="block" role="radio" data-i18n-title="sxInBlock" data-i18n-aria="sxInBlock">🧩</button></div>
   </div>
   <div class="segbar" id="stProg"></div>
   <div class="ststage" id="stStage"></div>
@@ -131,7 +131,6 @@
     <div class="dk-speak">
       <div class="tools">
         <button class="chip" id="stHint">💡 힌트</button>
-        <button class="chip" id="stPlay" data-i18n="listen">🔊 듣기</button>
         <button class="chip" id="stAutoBtn" data-i18n="auto">⏭ 자동</button>
         <button class="chip done" id="stDone" disabled data-i18n="doneChip">✅ 완료</button>
       </div>
@@ -146,10 +145,9 @@
       </div>
     </div>
     <div class="dk-word">
-      <div class="tools">
-        <button class="chip" id="stHintW" data-i18n="hint0">💡 힌트</button>
-        <button class="chip" id="stReset" data-i18n="sxReset">↺ 다시</button>
-        <button class="chip" id="stPlayW" data-i18n="listen">🔊 듣기</button>
+      <div class="fbtns">
+        <button class="fbtn" id="stHintW" data-i18n-title="hint0" data-i18n-aria="hint0">💡</button>
+        <button class="fbtn" id="stReset" data-i18n-title="sxReset" data-i18n-aria="sxReset">↺</button>
       </div>
       <div class="row">
         <button class="nav" id="stPrevW" data-i18n-aria="prevLine">‹</button>
@@ -257,6 +255,6 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=3.17.0"></script>
+<script type="module" src="js/app.js?v=3.18.0"></script>
 </body>
 </html>

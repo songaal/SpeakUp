@@ -12,7 +12,7 @@ import { chime, thud, tick, fanfare, unlockAudio, startConfetti, stopConfetti, s
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-const K = { meta: "speakup.sx.v1", best: "speakup.sxbest.v1", pos: "speakup.sxpos.v1", word: "speakup.sxword.v1", input: "speakup.sxinput.v1", auto: "speakup.sxauto.v1", mode: "speakup.mode.v1", sess: "speakup.sxsess.v1", keep: "speakup.sxkeep.v1" };
+const K = { meta: "speakup.sx.v1", best: "speakup.sxbest.v1", pos: "speakup.sxpos.v1", word: "speakup.sxword.v1", input: "speakup.sxinput.v2", auto: "speakup.sxauto.v1", mode: "speakup.mode.v1", sess: "speakup.sxsess.v1", keep: "speakup.sxkeep.v1" };
 const ls = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { C.toast(t("sxStoreFull")); } },
@@ -21,8 +21,8 @@ let C = null;   // context from app.js: {showView, view(), toast, ask, renderLib
 let meta = ls.get(K.meta, null); if (!meta || !Array.isArray(meta.trainings)) meta = { trainings: [] };
 let best = ls.get(K.best, {});      // "chapterId|itemIndex|questionKey" → best score
 let sess = ls.get(K.sess, {});      // "chapterId|itemIndex" → unfinished run {pos, res:{qi: score}, start} (이어서)
-// input mode: "speak" (default) | "block" (word blocks) | "type" (keyboard into the blanks); v3.16 stored a boolean in sxword
-let inMode = ls.get(K.input, ls.get(K.word, false) ? "block" : "speak"); if (!["speak", "block", "type"].includes(inMode)) inMode = "speak";
+// input mode: "type" (keyboard into the blanks — default since v3.18) | "speak" | "block" (word blocks)
+let inMode = ls.get(K.input, "type"); if (!["speak", "block", "type"].includes(inMode)) inMode = "type";
 let wordMode = inMode !== "speak", blockMode = inMode === "block", typeMode = inMode === "type";
 let autoNext = ls.get(K.auto, true), keepOn = ls.get(K.keep, false);
 const saveMeta = () => ls.set(K.meta, meta);
@@ -350,7 +350,8 @@ function startTest(at = 0, how = "new", order = null) {
   W = {}; T = {}; keep = {}; resultShown = false; S.sweep = false;
   $("stTitle").textContent = it.kind === "unit" ? `${it.no} · ${it.focus}` : itemTitle(it);
   $("stResult").classList.remove("show");
-  transition(() => { C.showView("st"); paintMode(); renderQ(0); });
+  const show = () => { C.showView("st"); paintMode(); renderQ(0); };
+  typeMode ? show() : transition(show);   // typing: render inside the tap so focusing the first blank opens the keyboard (iOS)
 }
 function saveSess() {
   if (!S || S.round !== 1) return;
@@ -383,7 +384,7 @@ function renderQ(dir) {
   const prev = S.pos > 0 ? S.qs[S.order[S.pos - 1]] : null;
   const intro = dir > 0 && !S.sweep && prev && prev.sec !== q.sec ? `<div class="secintro">🎉 ${t("sxSecDone", secName(prev.sec))} <b>${t("sxSecNext", secName(q.sec))}</b></div>` : "";
   const card = `<div class="qcard ${dir > 0 ? "in-r" : dir < 0 ? "in-l" : "in"}">${intro}
-      <div class="qtop"><span class="sec ${q.sec}">${esc(secLabel(q))}</span>${q.derived ? `<span class="qnote">${t("sxBuildUp")}</span>` : ""}${q.noAnswer ? `<span class="qnote">${t("sxFreeSpeak")}</span>` : ""}${bsHTML(best[bestKey(S.cid, S.ii, q)])}</div>
+      <div class="qtop"><span class="sec ${q.sec}">${esc(secLabel(q))}</span>${q.derived ? `<span class="qnote">${t("sxBuildUp")}</span>` : ""}${q.noAnswer ? `<span class="qnote">${t("sxFreeSpeak")}</span>` : ""}${bsHTML(best[bestKey(S.cid, S.ii, q)])}${q.noAnswer ? "" : `<button class="qplay" id="stSay" title="${esc(t("listen"))}" aria-label="${esc(t("listen"))}"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8.5a4.5 4.5 0 0 1 0 7M18.5 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>`}</div>
       <div class="qko">${q.parts.length > 1 ? q.parts.map((p, i) => `<span class="${i === q.parts.length - 1 ? "new" : ""}">${esc(p)}</span>`).join(`<i class="sl">/</i>`) : esc(q.ko)}</div>
       ${chunkHTML(q.chunks)}
       ${q.hints.length ? `<div class="hchips">${q.hints.map(h => `<span class="hchip">🔑 ${esc(h)}</span>`).join("")}</div>` : ""}
@@ -395,7 +396,7 @@ function renderQ(dir) {
   paintProg(); paintMic(); updateHint();
   paintResultPill(r);
   if (rec.listening && !wordMode && !r) live({ finalText: "", interim: "", parts: [] });   // keep mode: still listening on the new question
-  if (typeMode && !q.noAnswer && !tstate(qi).done && matchMedia("(hover: hover) and (pointer: fine)").matches) focusSlot(firstOpen(tstate(qi)));   // desktop: ready to type
+  if (typeMode && !q.noAnswer && !tstate(qi).done) focusSlot(firstOpen(tstate(qi)));   // ready to type in the first blank
 }
 const secName = sec => sec === "s1" ? `STEP 1 · ${t("sxSecSteps")}` : sec === "var" ? t("sxSecVarShort") : sec === "s2" ? "STEP 2" : "STORY";
 function paintResultPill(r) {
@@ -403,7 +404,7 @@ function paintResultPill(r) {
   if (!r) { el.className = "result"; return; }
   if (r.score == null) { el.innerHTML = `<span>🗣 ${t("sxFreeDone")}</span>`; el.className = "result show free"; return; }
   // no numbers — just a friendly word; red marks show what to look at
-  const msg = r.score === 100 ? "Perfect! 🎉" : r.kind === "type" ? t("sxTypeRed") : r.kind === "word" ? t("sxBlockRed") : t("sxSpeakRed");
+  const msg = r.score === 100 ? "Perfect! 🎉" : typeMode ? t("sxTypeRed") : blockMode ? t("sxBlockRed") : t("sxSpeakRed");
   el.innerHTML = `<span>${msg}</span>`;
   el.className = "result show " + (r.score === 100 ? "good" : "mid");
 }
@@ -681,8 +682,10 @@ function paintMic() {
 }
 function updateHint() {
   const b = $("stHint");
-  if (typeMode) { const w = $("stHintW"); w.textContent = t("hint" + hintLv); w.classList.toggle("on", hintLv > 0); return; }
-  if (blockMode) { $("stHintW").textContent = t("hint0"); $("stHintW").classList.remove("on"); return; }
+  if (wordMode) {   // floating round 💡 (typing cycles 💡 → 🔤 first letter → 👀 answer)
+    const lv = typeMode ? hintLv : 0, w = $("stHintW");
+    w.textContent = ["💡", "🔤", "👀"][lv]; w.title = t("hint" + lv); w.setAttribute("aria-label", w.title); w.classList.toggle("on", lv > 0); return;
+  }
   b.textContent = t("hint" + hintLv); b.classList.toggle("on", hintLv > 0);
 }
 // Leaving a question: normal mode drops the mic; 유지 keeps the session and starts a fresh capture.
@@ -767,7 +770,8 @@ export function initSx(ctx) {
   $("stKeep").onclick = () => { keepOn = !keepOn; ls.set(K.keep, keepOn); paintMic(); if (rec.listening) $("stDone").disabled = !(cur.finalText + cur.interim).trim(); C.toast(keepOn ? t("keepOnToast") : t("keepOffToast")); };
   $("stDone").onclick = () => { unlockAudio(); capDone(); };
   $("stHint").onclick = () => { if (wordMode) { wordHint(); return; } if (qOf().noAnswer) return; hintLv = (hintLv + 1) % 3; updateHint(); paintAnswer(); };
-  [$("stPlay"), $("stPlayW")].forEach(b => b.onclick = () => { if (qOf().noAnswer) { C.toast(t("sxNoAnsListen")); return; } if (rec.listening) rec.stop(true); say(qOf().en); });
+  // 🔊 next to the question: TTS of the answer
+  $("stStage").addEventListener("click", e => { if (!S || !e.target.closest("#stSay")) return; if (qOf().noAnswer) return; if (rec.listening) rec.stop(true); say(qOf().en); });
   $("stAutoBtn").onclick = () => { autoNext = !autoNext; ls.set(K.auto, autoNext); paintMode(); };
   $("stReset").onclick = () => { if (qOf().noAnswer) return; typeMode ? resetType() : resetWord(); };
   $("stHintW").onclick = () => typeMode ? typeHint() : wordHint();
