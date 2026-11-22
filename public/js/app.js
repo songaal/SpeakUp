@@ -1,11 +1,12 @@
-// Speak Up — UI. Views: library → info → player. All data lives in localStorage (see store below).
+// Speak Up — UI. Views: library → info → player. Data: localStorage via store.js (synced to the server when signed in).
 import { parseMd, toMd, libraryToMd, libraryToJson, parseJsonImport, tokenize, fillWords, scoreAttempt, dialogStats } from "./core.js";
 import { SAMPLE_MD, OLD_SAMPLE, CONVERT_PROMPT, CONVERT_PROMPT_EN } from "./content.js";
 import { t, lang, setLang, langChoice, setLangChoice, resolveLang, applyStatic, QUOTES } from "./i18n.js";
 import { unlockAudio, chime, fanfare, startConfetti as confettiOn, stopConfetti as confettiOff } from "./fx.js";
 import { hub } from "./speech.js";
-import { initSx, sxApplyLang, renderTrainings, newTraining } from "./sx.js";
-const VERSION = "3.21.0";
+import { initSx, sxApplyLang, renderTrainings, newTraining, refreshSharedSx } from "./sx.js";
+import { ls as store, account, sharedContent, refreshShared, logout, onSync } from "./store.js";
+const VERSION = "3.22.0";
 const promptText = () => lang() === "en" ? CONVERT_PROMPT_EN : CONVERT_PROMPT;
 
 /* ================= store (localStorage) ================= */
@@ -13,9 +14,12 @@ const K = { lib: "speakup.lib.v3", best: "speakup.best.v3", pos: "speakup.pos.v3
 let storageOK = true;
 try { localStorage.setItem("speakup.probe", "1"); localStorage.removeItem("speakup.probe"); } catch (e) { storageOK = false; }
 const ls = {
-  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { storageOK = false; return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { storageOK = false; showStoreWarn(); } },
+  get(k, d) { return store.get(k, d); },
+  set(k, v) { try { store.set(k, v); } catch (e) { storageOK = false; showStoreWarn(); } },
 };
+const me = account();                          // null = guest
+const isShared = d => !!(d && d.owner);        // someone else's dialogue (read-only)
+let sharedLib = (sharedContent().dialogs || []).filter(d => d && d.id && Array.isArray(d.lines));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const newDialog = (d, t = Date.now()) => ({ id: uid(), title: d.title, lines: d.lines, created: t, updated: t });
 
@@ -75,17 +79,25 @@ function renderLib() {
   $("libView").classList.toggle("editing", editing);
   $("editModeBtn").textContent = editing ? t("done") : t("edit"); $("editModeBtn").classList.toggle("on", editing);
   const el = $("dlist");
+  const shTop = !editing && sharedLib.length ? `<div class="secdiv"><span>📚 ${t("sharedSec")}</span><i></i></div>`
+    + [...sharedLib].sort((a, b) => (b.created || 0) - (a.created || 0)).map(d => {
+      const n = d.lines.length, cnt = countMap[d.id] || 0, last = lastMap[d.id];
+      return `<div class="dcard shared" data-id="${d.id}"><span class="dno sh">📚</span>
+        <div class="dmain"><div class="dt">${esc(d.title)}</div>
+          <div class="dm">${t("cardMeta", n, cnt, last ? relDate(last) : "")}</div><div class="dby">${t("sharedBy", d.owner.name || "")}</div></div>
+        <span class="chev">›</span></div>`;
+    }).join("") + `<div class="secdiv"><span>${t("mySec")}</span><i></i></div>` : "";
   if (!lib.length) {
-    el.innerHTML = `<div class="empty">${t("empty")}<br><button class="btn pri" id="addSample">${t("addSample")}</button></div>`;
+    el.innerHTML = shTop + `<div class="empty">${t("empty")}<br><button class="btn pri" id="addSample">${t("addSample")}</button></div>`;
     $("addSample").onclick = () => addDialogs(parseMd(SAMPLE_MD));
   } else {
     const sorted = [...lib].sort((a, b) => (b.created || 0) - (a.created || 0));   // newest first, numbered N…1
-    el.innerHTML = sorted.map((d, i) => {
+    el.innerHTML = shTop + sorted.map((d, i) => {
       const n = d.lines.length, cnt = countMap[d.id] || 0, last = lastMap[d.id], sel = selected.has(d.id);
       return `<div class="dcard ${sel ? "sel" : ""}" data-id="${d.id}">
         <span class="chk">${sel ? "✓" : ""}</span>
         <span class="dno">${sorted.length - i}</span>
-        <div class="dmain"><div class="dt">${esc(d.title)}</div>
+        <div class="dmain"><div class="dt">${esc(d.title)}${d.shared ? ` <span class="shtag">${t("sharingTag")}</span>` : ""}</div>
           <div class="dm">${t("cardMeta", n, cnt, last ? relDate(last) : "")}</div></div>
         <span class="chev">›</span></div>`;
     }).join("");
@@ -98,7 +110,7 @@ function renderLib() {
 $("dlist").addEventListener("click", e => {
   const c = e.target.closest(".dcard"); if (!c) return;
   const id = c.dataset.id;
-  if (editing) { selected.has(id) ? selected.delete(id) : selected.add(id); renderLib(); }
+  if (editing) { if (c.classList.contains("shared")) return; selected.has(id) ? selected.delete(id) : selected.add(id); renderLib(); }
   else openInfo(id);
 });
 $("editModeBtn").onclick = () => { editing = !editing; selected.clear(); setFab(false); renderLib(); };
@@ -205,11 +217,15 @@ $("exDown").onclick = async () => {
 };
 
 /* ================= INFO ================= */
-function openInfo(id) { dlg = lib.find(d => d.id === id); if (!dlg) return; spkColor = {}; showView("info"); renderInfo(); $("infoView").querySelector(".infoscroll").scrollTop = 0; }
+function openInfo(id) { dlg = lib.find(d => d.id === id) || sharedLib.find(d => d.id === id); if (!dlg) return; spkColor = {}; showView("info"); renderInfo(); $("infoView").querySelector(".infoscroll").scrollTop = 0; }
 function renderInfo() {
   const s = dialogStats(dlg), n = s.sentences, at = Math.min(posMap[dlg.id] || 0, n - 1);
+  const ro = isShared(dlg);
+  $("infoEdit").style.display = ro ? "none" : "";
   $("infoBody").innerHTML = `
     <div class="ititle">${esc(dlg.title)}</div>
+    ${ro ? `<div class="shbar ro">📚 ${t("sharedBy", dlg.owner.name || "")} · ${t("readOnly")}</div>`
+      : me ? `<button class="shbar ${dlg.shared ? "on" : ""}" id="shareTgl"><span class="sw"><i></i></span><span>${dlg.shared ? t("shareOn") : t("shareOff")}</span></button>` : ""}
     <div class="stats">
       <div class="stat"><b>${n}</b><span>${t("stSentences")}</span></div>
       <div class="stat"><b>${s.words}</b><span>${t("stWords")}</span></div>
@@ -222,6 +238,9 @@ function renderInfo() {
     <ul class="tl">${dlg.lines.map((l, i) => { const b = bestOf(dlg, l);
       return `<li><span class="no">${i + 1}</span><div class="tx"><div class="te">${spkChip(l.spk)}${esc(l.en)}</div><div class="tk">${esc(l.ko || "")}</div></div><span class="bs ${b === 100 ? "p" : ""}">${b != null ? b + "%" : ""}</span></li>`; }).join("")}</ul>`;
   $("startTop").onclick = () => openPlayer(0);
+  if ($("shareTgl")) $("shareTgl").onclick = () => {
+    dlg.shared = !dlg.shared; if (!dlg.shared) delete dlg.shared; saveLib(); renderInfo(); toast(dlg.shared ? t("sharedToast") : t("unsharedToast"));
+  };
   if ($("startResume")) $("startResume").onclick = () => openPlayer(at);
 }
 function goLibrary() {
@@ -245,7 +264,7 @@ function openPlayer(at) {
   lines = dlg.lines; attempts = {}; lineFilled = {}; refCache = {}; liveSt = null; hintLv = 0;
   idx = Math.max(0, Math.min(lines.length - 1, at));
   posMap[dlg.id] = idx; ls.set(K.pos, posMap);
-  $("ptitle").textContent = dlg.title;
+  $("ptitle").textContent = dlg.title; $("editDlgBtn").style.display = isShared(dlg) ? "none" : "";
   showView("play"); updateHintBtn(); resEl.className = "result"; errEl.className = "err";
   renderAll(); requestAnimationFrame(() => centerCurrent(false));
 }
@@ -529,7 +548,20 @@ function applyLang() {
   sxApplyLang();
   if (view === "lib") renderLib(); else if (view === "info") renderInfo(); else if (view === "play") { renderAll(); requestAnimationFrame(() => centerCurrent(false)); }
 }
-$("settingsBtn").onclick = () => { paintLangSeg(); $("setOverlay").classList.add("show"); };
+function paintAcct() {
+  const b = $("acctBox");
+  if (!me) { b.innerHTML = `<div class="acct-g">${t("acctGuest")}</div><button class="btn pri setbtn" id="acctLogin">${t("acctLogin")}</button>`;
+    $("acctLogin").onclick = () => { try { sessionStorage.removeItem("speakup.guest.v1"); } catch (e) {} location.reload(); }; return; }
+  b.innerHTML = `<div class="acct-u">${me.picture ? `<img src="${esc(me.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="av">${esc((me.name || me.email || "?").slice(0, 1))}</span>`}
+    <div><b>${esc(me.name || "")}</b><span>${esc(me.email || "")}</span><em id="syncTxt"></em></div></div>
+    <button class="btn sec setbtn" id="acctLogout">${t("acctLogout")}</button>`;
+  $("acctLogout").onclick = async () => { if (await ask(t("acctLogoutQ"), t("acctLogout"))) logout(); };
+  paintSync();
+}
+let syncSt = "ok";
+function paintSync() { const e = $("syncTxt"); if (e) { e.textContent = t("sync_" + syncSt); e.className = "sync " + syncSt; } }
+if (me) onSync(s => { syncSt = s; paintSync(); });
+$("settingsBtn").onclick = () => { paintLangSeg(); paintAcct(); $("setOverlay").classList.add("show"); };
 $("setClose").onclick = () => $("setOverlay").classList.remove("show");
 $("setOverlay").addEventListener("click", e => { if (e.target.id === "setOverlay") $("setOverlay").classList.remove("show"); });
 $("langSeg").addEventListener("click", e => { const b = e.target.closest("[data-lang]"); if (!b) return; setLangChoice(b.dataset.lang); paintLangSeg(); applyLang(); });
@@ -540,3 +572,9 @@ document.addEventListener("touchmove", e => { if (e.scale && e.scale !== 1) e.pr
 
 initSx({ showView, view: () => view, toast, ask, renderLib });
 applyLang(); updateAuto(); updateKeep();
+// shared list changes while the app is open: refresh when the tab comes back
+if (me) document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible") return;
+  await refreshShared(); sharedLib = (sharedContent().dialogs || []).filter(d => d && d.id && Array.isArray(d.lines)); refreshSharedSx();
+  if (view === "lib") renderLib();
+});

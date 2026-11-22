@@ -584,3 +584,52 @@
   .abig{height:56px;font-size:17px;margin-top:4px}
   /* edit forms (rename / renumber / replace file) share the rounder sheet look */
   #sxfOverlay .sheet{border-radius:28px 28px 0 0;padding-top:22px}
+
+/* ================= v3.22: login, account, sharing ================= */
+.authview{position:fixed;inset:0;z-index:60;background:#fff;display:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.authview.on{display:block}
+body.v-auth{overflow:hidden}
+.auth-in{max-width:380px;margin:0 auto;padding:max(48px,env(safe-area-inset-top)) 24px calc(44px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;text-align:center;min-height:100%}
+.auth-logo{width:92px;height:92px;border-radius:24px;margin-top:4vh;box-shadow:0 6px 0 var(--green-d)}
+.auth-title{font-size:34px;font-weight:900;color:var(--green);margin:18px 0 4px;letter-spacing:-.5px}
+.auth-sub{color:var(--muted);font-weight:700;margin:0 0 22px}
+.auth-perks{list-style:none;padding:0;margin:0 0 26px;text-align:left;width:100%;display:flex;flex-direction:column;gap:8px}
+.auth-perks li{background:var(--soft);border-radius:14px;padding:11px 14px;font-weight:700;font-size:15px;color:var(--ink)}
+.auth-btn{min-height:44px;width:100%;display:flex;justify-content:center}
+.auth-busy{display:none;margin-top:12px;color:var(--muted);font-weight:800}
+.auth-busy.show{display:block}
+.authview .ferr{margin-top:12px}
+.auth-dev{display:flex;gap:8px;margin-top:14px;width:100%}
+.auth-dev input{flex:1;font:inherit;font-size:16px;padding:8px 10px;border:2px solid var(--line);border-radius:12px}
+.auth-guest{margin-top:auto;padding-top:34px;background:none;border:0;color:var(--faint);font:inherit;font-weight:800;font-size:14px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.auth-guestbox{display:none;width:100%;margin-top:12px;text-align:left;background:var(--orange-l);border-radius:16px;padding:14px 16px}
+.auth-guestbox.open{display:block}
+.auth-gt{margin:0 0 6px;font-weight:900;color:var(--orange-d)}
+.auth-guestbox ul{margin:0 0 12px;padding-left:18px;font-size:14px;font-weight:700;color:var(--ink);display:flex;flex-direction:column;gap:4px}
+.auth-guestbox .btn{width:100%}
+
+.acct{display:flex;flex-direction:column;gap:10px}
+.acct-g{color:var(--muted);font-weight:700;font-size:14px}
+.acct-u{display:flex;align-items:center;gap:12px}
+.acct-u img,.acct-u .av{width:44px;height:44px;border-radius:50%;flex:none;object-fit:cover}
+.acct-u .av{background:var(--blue-l);color:var(--blue-d);display:grid;place-items:center;font-weight:900;font-size:18px}
+.acct-u div{display:flex;flex-direction:column;min-width:0}
+.acct-u b{font-weight:900}
+.acct-u span{color:var(--muted);font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis}
+.sync{font-style:normal;font-size:12px;font-weight:800;color:var(--green-d)}
+.sync.pending{color:var(--blue-d)} .sync.offline,.sync.auth{color:var(--orange-d)}
+
+.secdiv{display:flex;align-items:center;gap:10px;margin:14px 2px 8px;font-weight:900;font-size:13px;color:var(--muted);letter-spacing:.3px}
+.secdiv:first-child{margin-top:2px}
+.secdiv i{flex:1;height:2px;background:var(--line);border-radius:2px}
+.dcard.shared{border-color:var(--blue-l);background:#F7FCFF}
+.dno.sh{background:var(--blue-l);font-size:16px}
+.dby{font-size:12px;font-weight:800;color:var(--blue-d);margin-top:2px}
+.shtag{display:inline-block;vertical-align:2px;font-size:11px;font-weight:900;color:var(--blue-d);background:var(--blue-l);border-radius:8px;padding:2px 7px;margin-left:4px}
+
+.shbar{display:flex;align-items:center;gap:12px;width:100%;margin:10px 0 14px;padding:12px 14px;border-radius:16px;border:2px solid var(--line);border-bottom-width:4px;background:#fff;font:inherit;font-weight:800;font-size:14px;color:var(--muted);text-align:left;cursor:pointer}
+.shbar.on{border-color:var(--blue);background:var(--blue-l);color:var(--blue-d)}
+.shbar.ro{cursor:default;border-color:var(--blue-l);background:#F7FCFF;color:var(--blue-d);border-bottom-width:2px}
+.shbar .sw{flex:none;width:42px;height:24px;border-radius:12px;background:var(--line);position:relative;transition:background .2s}
+.shbar .sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .2s}
+.shbar.on .sw{background:var(--blue)} .shbar.on .sw i{transform:translateX(18px)}

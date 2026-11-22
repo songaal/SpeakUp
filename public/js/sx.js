@@ -6,6 +6,7 @@ import { t, lang } from "./i18n.js";
 import { tokenize, fillWords, scoreAttempt } from "./core.js";
 import { parseChapter, itemTitle, questionsOf, slashParts, chunksOf, hintList, makeBlocks, checkBlocks, nextBlockHint, numbersFromFilename, typeSlots, checkTyped, typedKey, nextStop } from "./sxcore.js";
 import { putFile, getFile, delFile } from "./sxstore.js";
+import { ls as store, account, sharedContent } from "./store.js";
 import { createRecognizer, speechEngine } from "./speech.js";
 import { chime, thud, tick, fanfare, unlockAudio, startConfetti, stopConfetti, say, hush, haptic } from "./fx.js";
 
@@ -14,11 +15,16 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const K = { meta: "speakup.sx.v1", best: "speakup.sxbest.v1", pos: "speakup.sxpos.v1", word: "speakup.sxword.v1", input: "speakup.sxinput.v2", auto: "speakup.sxauto.v1", mode: "speakup.mode.v1", sess: "speakup.sxsess.v1", keep: "speakup.sxkeep.v1" };
 const ls = {
-  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { C.toast(t("sxStoreFull")); } },
+  get(k, d) { return store.get(k, d); },
+  set(k, v) { try { store.set(k, v); } catch (e) { C.toast(t("sxStoreFull")); } },
 };
 let C = null;   // context from app.js: {showView, view(), toast, ask, renderLib}
 let meta = ls.get(K.meta, null); if (!meta || !Array.isArray(meta.trainings)) meta = { trainings: [] };
+// v3.22: trainings other users shared (read-only, carry `owner`); progress is still this user's own
+const okTr = x => x && x.id && Array.isArray(x.parts);
+let sharedTr = (sharedContent().trainings || []).filter(okTr);
+export function refreshSharedSx() { sharedTr = (sharedContent().trainings || []).filter(okTr); }
+const roTr = tr => !!(tr && tr.owner);
 let best = ls.get(K.best, {});      // "chapterId|itemIndex|questionKey" → best score
 let sess = ls.get(K.sess, {});      // "chapterId|itemIndex" → unfinished run {pos, res:{qi: score}, start} (이어서)
 // input mode: "type" (keyboard into the blanks — default since v3.18) | "speak" | "block" (word blocks)
@@ -45,7 +51,7 @@ function setMode(m) {
 
 /* ================= tree helpers ================= */
 let nav = { t: null, p: null, c: null, it: null };
-const trainingOf = () => meta.trainings.find(x => x.id === nav.t);
+const trainingOf = () => meta.trainings.find(x => x.id === nav.t) || sharedTr.find(x => x.id === nav.t);
 const partOf = () => { const tr = trainingOf(); return tr && tr.parts.find(x => x.id === nav.p); };
 const chapterOf = () => { const p = partOf(); return p && p.chapters.find(x => x.id === nav.c); };
 // v3.20: no separate part page — the training page lists every part (as a section header) with its chapters
@@ -70,14 +76,21 @@ const ring = (done, total) => {
 /* ================= library tab: 훈련 list ================= */
 export function renderTrainings(el) {
   const list = [...meta.trainings].sort((a, b) => b.created - a.created);
+  const sh = [...sharedTr].sort((a, b) => b.created - a.created);
+  const shHTML = sh.length ? `<div class="secdiv"><span>📚 ${t("sharedSec")}</span><i></i></div>` + sh.map(tr => {
+    const nCh = tr.parts.reduce((a, p) => a + (p.chapters || []).length, 0);
+    return `<div class="dcard sxcard shared" data-tid="${tr.id}"><span class="dno sh">📚</span>
+      <div class="dmain"><div class="dt">${esc(tr.title)}</div><div class="dm">${t("sxTrainingMeta", tr.parts.length, nCh)}</div><div class="dby">${t("sharedBy", tr.owner.name || "")}</div></div><span class="chev">›</span></div>`;
+  }).join("") + `<div class="secdiv"><span>${t("mySec")}</span><i></i></div>` : "";
   if (!list.length) {
-    el.innerHTML = `<div class="sx-empty"><div class="sx-empty-ic">🧩</div><b>${t("sxEmptyTitle")}</b><p>${t("sxEmptyBody")}</p><button class="btn pri" id="sxFirst">${t("sxNewTraining")}</button></div>`;
-    $("sxFirst").onclick = newTraining; return;
+    el.innerHTML = shHTML + `<div class="sx-empty"><div class="sx-empty-ic">🧩</div><b>${t("sxEmptyTitle")}</b><p>${t("sxEmptyBody")}</p><button class="btn pri" id="sxFirst">${t("sxNewTraining")}</button></div>`;
+    $("sxFirst").onclick = newTraining;
+    el.querySelectorAll("[data-tid]").forEach(c => c.onclick = () => openTraining(c.dataset.tid)); return;
   }
-  el.innerHTML = list.map((tr, i) => {
+  el.innerHTML = shHTML + list.map((tr, i) => {
     const nCh = tr.parts.reduce((a, p) => a + p.chapters.length, 0);
     return `<div class="dcard sxcard" data-tid="${tr.id}"><span class="dno sxno">${list.length - i}</span>
-      <div class="dmain"><div class="dt">${esc(tr.title)}</div><div class="dm">${t("sxTrainingMeta", tr.parts.length, nCh)}</div></div><span class="chev">›</span></div>`;
+      <div class="dmain"><div class="dt">${esc(tr.title)}${tr.shared ? ` <span class="shtag">${t("sharingTag")}</span>` : ""}</div><div class="dm">${t("sxTrainingMeta", tr.parts.length, nCh)}</div></div><span class="chev">›</span></div>`;
   }).join("");
   el.querySelectorAll("[data-tid]").forEach(c => c.onclick = () => openTraining(c.dataset.tid));
 }
@@ -110,8 +123,9 @@ async function renderSx() {
   const l = level(), p = partOf(), ch = chapterOf(), body = $("sxBody");
   const crumb = [tr.title, p && `PART ${p.no}`, ch && `CH ${ch.no}`].filter(Boolean);
   $("sxCrumb").textContent = crumb.slice(0, -1).join(" › ") || t("sxTraining");
-  $("sxMore").style.visibility = l === "item" ? "hidden" : "";
-  if (l !== "training") editMode = false;
+  const ro = roTr(tr);
+  $("sxMore").style.visibility = l === "item" || ro ? "hidden" : "";
+  if (l !== "training" || ro) editMode = false;
   $("sxMore").textContent = l === "training" ? t(editMode ? "sxDoneEdit" : "sxEdit") : t("editInfo");
   $("sxMore").classList.toggle("editon", l === "training" && editMode);
   $("sxView").classList.toggle("editing", l === "training" && editMode);
@@ -123,8 +137,10 @@ async function renderSx() {
     if (editMode) $("sxCrumb").textContent = t("sxEditing");
     const parts = [...tr.parts].sort(byNo), chs = [];
     parts.forEach(pt => [...pt.chapters].sort(byNo).forEach(c => chs.push(c)));
+    const shareBar = ro ? `<div class="shbar ro">📚 ${t("sharedBy", tr.owner.name || "")} · ${t("readOnly")}</div>`
+      : account() ? `<button class="shbar ${tr.shared ? "on" : ""}" id="sxShareTgl"><span class="sw"><i></i></span><span>${tr.shared ? t("shareOnTr") : t("shareOffTr")}</span></button>` : "";
     if (editMode) body.innerHTML = trainingEditHTML(tr, parts);
-    else body.innerHTML = (chs.length ? `<div class="trprog"><span>${t("sxProgLbl")}</span><div class="trbar"><i id="sxProgBar" style="width:0%"></i></div><b id="sxProgTxt"></b></div>` : "")
+    else body.innerHTML = shareBar + (chs.length ? `<div class="trprog"><span>${t("sxProgLbl")}</span><div class="trbar"><i id="sxProgBar" style="width:0%"></i></div><b id="sxProgTxt"></b></div>` : "")
       + (parts.length ? parts.map(pt => `<div class="pdiv"><span class="pno">PART ${esc(pt.no)}</span><b>${esc(pt.title)}</b><i></i></div>`
         + ([...pt.chapters].sort(byNo).map(c => `<button class="chcard" data-cid="${c.id}" data-pc="${pt.id}"><span class="chbadge" data-cbadge="${c.id}">${esc(c.no)}</span>
             <span class="chmain"><span class="cht">CH ${esc(c.no)} · ${esc(c.title)}</span><span class="chm" data-cmeta="${c.id}">${esc(c.file || "")}</span></span>
@@ -133,7 +149,10 @@ async function renderSx() {
       : emptyHint("📚", t("sxNoParts")));
     body.querySelectorAll(".chcard[data-cid]").forEach(c => c.onclick = () => { nav.p = c.dataset.pc; nav.c = c.dataset.cid; go(); });
     if (editMode) { wireTrainingEdit(tr, body); return; }
-    fab.style.display = ""; fab.classList.add("round"); $("sxFabLbl").textContent = ""; fab.onclick = toggleDial;
+    if ($("sxShareTgl")) $("sxShareTgl").onclick = () => {
+      tr.shared = !tr.shared; if (!tr.shared) delete tr.shared; saveMeta(); renderSx(); C.renderLib(); C.toast(tr.shared ? t("sharedToast") : t("unsharedToast"));
+    };
+    if (!ro) { fab.style.display = ""; fab.classList.add("round"); } $("sxFabLbl").textContent = ""; fab.onclick = toggleDial;
     let qT = 0, qD = 0, cDone = 0, left = chs.length;
     for (const c of chs) {   // status per chapter once its file is read
       loadChapter(c).then(d => {

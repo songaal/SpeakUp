@@ -12,9 +12,40 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3.21.0">
+<link rel="stylesheet" href="style.css?v=3.22.0">
 </head>
 <body class="v-lib">
+
+<!-- ================= LOGIN (v3.22: shown whenever nobody is signed in) ================= -->
+<section class="authview" id="authView">
+  <div class="auth-in">
+    <img class="auth-logo" src="icons/icon.svg" alt="">
+    <h1 class="auth-title">Speak Up</h1>
+    <p class="auth-sub" data-i18n="authSub">한국어를 보고 영어로 말해 보세요</p>
+    <ul class="auth-perks">
+      <li data-i18n="authPerk1">☁️ 내 대화·문장만들기와 진행 상황이 모든 기기에서 그대로</li>
+      <li data-i18n="authPerk2">📚 다른 회원이 공유한 콘텐츠로 연습</li>
+      <li data-i18n="authPerk3">🔗 내가 만든 콘텐츠를 공유</li>
+    </ul>
+    <div class="auth-btn" id="authBtn"></div>
+    <div class="auth-busy" id="authBusy" data-i18n="authBusy">로그인하는 중…</div>
+    <div class="ferr" id="authErr"></div>
+    <div class="auth-dev" id="authDev" style="display:none">
+      <input id="authDevEmail" type="email" value="dev@example.com"><button class="btn sec" id="authDevGo">Dev login</button>
+    </div>
+    <button class="auth-guest" id="authGuest" data-i18n="authGuest">로그인 없이 사용하기</button>
+    <div class="auth-guestbox" id="authGuestBox">
+      <p class="auth-gt" data-i18n="authGuestTitle">로그인하지 않으면</p>
+      <ul>
+        <li data-i18n="authLim1">이 브라우저에만 저장돼요 (다른 기기와 동기화 안 됨)</li>
+        <li data-i18n="authLim2">다른 회원이 공유한 콘텐츠를 볼 수 없어요</li>
+        <li data-i18n="authLim3">내 콘텐츠를 공유할 수 없어요</li>
+        <li data-i18n="authLim4">사이트 데이터를 지우거나 시크릿 모드면 사라질 수 있어요 — 내보내기로 백업하세요</li>
+      </ul>
+      <button class="btn sec" id="authGuestGo" data-i18n="authGuestGo">알겠어요, 로그인 없이 시작</button>
+    </div>
+  </div>
+</section>
 
 <!-- ================= LIBRARY ================= -->
 <section class="view on" id="libView">
@@ -218,6 +249,10 @@
       </div>
     </div>
     <div class="setrow">
+      <div class="setlbl" data-i18n="acctLabel">계정</div>
+      <div class="acct" id="acctBox"></div>
+    </div>
+    <div class="setrow">
       <div class="setlbl" data-i18n="dataLabel">데이터</div>
       <button class="btn sec setbtn" id="exportBtn" data-i18n="exportAll">전체 내보내기</button>
     </div>
@@ -271,6 +306,6 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script type="module" src="js/app.js?v=3.21.0"></script>
+<script type="module" src="js/boot.js?v=3.22.0"></script>
 </body>
 </html>

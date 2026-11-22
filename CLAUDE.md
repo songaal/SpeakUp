@@ -8,17 +8,29 @@ English-speaking practice web app with two modes (tabs at the top of the library
 - No zoom (viewport `maximum-scale=1, user-scalable=no`, `touch-action:manipulation`, iOS `gesture*` events blocked, inputs ≥16px so iOS doesn't auto-zoom on focus) while text stays drag-selectable (no `user-select:none` on content).
 - Theme: Duolingo-like (Nunito, green `#58CC02`, chunky bottom-border buttons). Keep it.
 
+## Accounts, sync, sharing (v3.22)
+Owner's spec (2026/11/22): Google login; content the **creator** marks as shared can be used by every signed-in member; sharing is set only on the top item (대화 = each dialogue, 문장만들기 = each 훈련 — parts/chapters follow it); progress is per user.
+- **Entry = `public/js/boot.js`** (not app.js). It calls `store.boot()` *before* importing app.js, because app.js/sx.js read storage at module top level. Signed in → pull server copy, then `import("./app.js?v=…")`. Not signed in → full-screen **login screen** `#authView` every time a tab opens (Google button via Google Identity Services, popup mode) with a small "로그인 없이 사용하기" link that unfolds the guest limitations (this browser only / no shared content / can't share / can be erased) and a confirm button; the guest choice is remembered per tab in `sessionStorage` (`speakup.guest.v1`). In a claude.ai artifact (`window.claude.use`) boot skips straight to guest. Login success → `location.reload()`.
+- **`public/js/store.js`**: `ls.get/set` used by app.js and sx.js. Synced keys (`SYNC_KEYS`: lib/best/pos/count/last + sx/sxbest/sxsess) are namespaced per account in localStorage (`speakup.u.<userId>.<key>`, guest = plain key as before) and every `set` queues a debounced push (`POST /api/data`, whole value per key, last write wins; pending keys kept in localStorage and retried on `online` / next boot). Device settings (lang, keep, auto, input mode, tab) are not synced. First sign-in of an account that is empty on the server copies this browser's guest data up (incl. chapter files). Offline start with a cached account (`speakup.acct.v1`) uses the local cache.
+- Chapter files (`sxstore.js`): `putFile` also `PUT /api/file/:id`; `getFile` = IndexedDB → own server file → `/api/shared/file/:id` (cached locally, never uploaded); `delFile` also deletes on the server.
+- **Sharing**: owner toggles `shared: true` on the dialogue object (info page switch `#shareTgl`) or training object (training page switch `#sxShareTgl`), only when signed in. Others get them from `GET /api/shared` (each item carries `owner: {id, name}`) → shown at the top of the library under "📚 공유받은 콘텐츠" with "○○ 님이 공유", read-only (no ✎ 수정 / ✎ in player / 편집 / FAB, not selectable in edit mode), their own progress keyed by the same ids. Own shared items show a "공유 중" tag. The shared list refreshes when the tab becomes visible.
+- **Server = `src/worker.js`** (`wrangler.jsonc`: `main`, `assets.run_worker_first: ["/api/*"]`, D1 binding `DB` = database `speakup`, var `GOOGLE_CLIENT_ID`). Tables are created on first request (`CREATE TABLE IF NOT EXISTS`): `users`, `sessions` (opaque token in HttpOnly SameSite=Lax cookie `su_sid`, 180 days), `kv` (user_id, k, v JSON text), `files` (chapter JSON per user), `shared` + `shared_files` (rebuilt from the owner's lib / sx value on every push). ID tokens are verified in the Worker (Google JWKS, RS256, aud = client id). Routes: `GET /api/config`, `POST /api/login {credential}`, `POST /api/logout`, `GET /api/me`, `GET|POST /api/data`, `GET|PUT|DELETE /api/file/:id`, `GET /api/shared`, `GET /api/shared/file/:id`, and `POST /api/dev-login {email}` only when `DEV_LOGIN=1`.
+- ⚙︎ 설정 › 계정: avatar, name, email, sync status (동기화됨 / 저장하는 중 / 오프라인 / 다시 로그인 필요), 로그아웃; guests get "Google로 로그인".
+
 ## Run / test / deploy
-- No build step. `public/` is served as-is. Local: `npm run dev` → http://localhost:8000 (ES modules need http, not `file://`; `localhost` counts as a secure context so the mic works).
+- Local with the API: `npx wrangler dev --local --port 8787 --var DEV_LOGIN:1` → http://localhost:8787 (local D1; the login screen shows a Dev login box). Static-only: `npm run dev` → http://localhost:8000 (no API → login screen says sign-in isn't ready; guest works).
+- No build step. `public/` is served as-is. (ES modules need http, not `file://`; `localhost` counts as a secure context so the mic works).
 - Unit tests for the pure logic: `npm test` (`node --test tests/*.test.mjs`). Add a test when you touch `core.js`.
 - Deploy: push to `main` → Cloudflare Workers Builds runs `npx wrangler deploy` (assets-only Worker, see `wrangler.jsonc`). Same setup as the owner's other kappy.app apps (e.g. `songaal/working`).
-- After changing CSS/JS, bump the `?v=` on `style.css` and `js/app.js` in `public/index.html` and the `version` in `package.json`.
+- After changing CSS/JS, bump the `?v=` on `style.css` and `js/boot.js` in `public/index.html`, `V` in `boot.js` (cache-buster for app.js), `VERSION` in app.js and the `version` in `package.json`.
 
 ## Files
 ```
 public/index.html        markup for all views + sheets (library, info, player, editor, export, modal, toast)
 public/style.css         all styles
-public/js/app.js         UI + state + speech engines (entry, ES module)
+public/js/boot.js        entry: auth check / login screen, then loads app.js
+public/js/store.js       storage (per-account namespacing), server sync, auth calls, shared content
+public/js/app.js         UI + state + speech engines (ES module)
 public/js/core.js        pure logic, no DOM: md/json parse+serialize, tokenize, align, score, stats  ← unit-tested
 public/js/sx.js          문장만들기 UI: mode tabs, training/part/chapter/item pages, form sheet, unit test (speaking + word blocks), result
 public/js/sxcore.js      문장만들기 pure logic: chapter JSON → items, questions, step answers, word blocks  ← unit-tested (tests/sx.test.mjs)
@@ -30,7 +42,8 @@ public/js/i18n.js        UI strings (STR.ko / STR.en), QUOTES for the finish scr
 public/manifest.webmanifest, public/icons/   PWA metadata + icons (icon.svg → PNGs via rsvg-convert)
 tests/core.test.mjs      node:test suite for core.js
 tests/sx.test.mjs        node:test suite for sxcore.js (inline fixture — don't commit the owner's book files, they are copyrighted)
-wrangler.jsonc           Cloudflare Worker (static assets only, custom domain speakup.kappy.app)
+src/worker.js            API Worker: Google sign-in, sessions, per-user sync, files, shared content (D1)
+wrangler.jsonc           Cloudflare Worker (assets + /api/* Worker, D1 `speakup`, custom domain speakup.kappy.app)
 ```
 
 ## Views (app.js)
@@ -65,7 +78,7 @@ Before/while speaking, a word of the current line is a blank slot (`.w.hid`) unt
 - 100% sentence → `chime()`: short rising two-note sine tone made with Web Audio (no file, original — not Duolingo's asset). AudioContext is unlocked on the mic / 완료 tap for iOS. Unverified on iPhone while the mic is open (iOS may duck or route it to the earpiece).
 - Firefox has no Web Speech recognition → mic disabled with a message.
 
-## Data (localStorage only — no server)
+## Data (localStorage; per account + synced to D1 when signed in — see "Accounts, sync, sharing")
 | key | value |
 |---|---|
 | `speakup.lib.v3` | `[{id, title, lines:[{spk, en, ko}], created, updated}]` — array order = list order |
@@ -75,7 +88,7 @@ Before/while speaking, a word of the current line is a blank slot (`.w.hid`) unt
 | `speakup.last.v3` | `{dialogId: ms}` — time of the last scored attempt; library card shows it as 오늘 / 어제 / N일 전 / M월 D일 (`relDate`) |
 | `speakup.auto.v3`, `speakup.keep.v3`, `speakup.lang.v3` | settings (`speakup.pause.v3` is obsolete) |
 First run seeds the sample dialogue (`SAMPLE_MD`) — the same in every browser, it is not the owner's data. Keep the sample generic: no work/company content (owner asked to replace the old team-meeting sample). On load, an unedited old sample (matched by `OLD_SAMPLE`) is swapped for the current one. If storage throws, a warning banner tells the user to export.
-Data is per browser **and per origin** (artifact vs localhost vs kappy.app are separate). Lost on clearing site data, private mode, Safari's 7-day eviction of non-home-screen sites. Export is the backup. If cross-device sync is ever wanted, it needs a server (e.g. Cloudflare KV/D1) — not built.
+Guest data is per browser **and per origin** (artifact vs localhost vs kappy.app are separate). Lost on clearing site data, private mode, Safari's 7-day eviction of non-home-screen sites. Export is the backup. Signed-in data lives on the server (D1) and is cached locally.
 
 ## Script format (.md) — import, export and the editor all use it
 ```
@@ -117,14 +130,16 @@ Owner's spec (2026/11/22): keep dialogues as 대화, add 문장만들기 as a se
 - Give every screen generous bottom space (owner found the bottoms cramped): player dock `40px + safe-area`, sheets `32px`, library bottom padding leaves room for the FAB, info `48px`, finish `44px`.
 
 - Info page: no "perfect sentences" progress box and no unique-word / average-length stats (owner removed them); Start sits where the progress box was.
-- No login/auth: data never leaves the browser, so others visiting the site can't see it. Owner agreed (2026/11/19) to stay login-free; only revisit if server sync is added.
+- ~~No login~~ (2026/11/19) → superseded 2026/11/22: Google login + server sync + sharing (v3.22). Guests can still use the app (local only), but the login screen is always shown first.
+- Sharing is decided by the **creator** of the content, not an admin (owner corrected this).
 - Player dock: chips row **above** the mic row (owner taps them a lot): 💡 힌트 · 🔊 듣기 · ⏭ 자동 · ✅ 완료 (one non-wrapping row), then ‹ mic 유지 ›. About 170 px tall with ~30 px bottom padding so the mic isn't glued to the bottom edge — not cramped, not the original ~200 px. No slow-TTS, no pause chip, no engine/hint text lines.
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.21.0 — 2026/11/22** (also `VERSION` in app.js, shown in Settings)
+- **Current version: v3.22.0 — 2026/11/22** (also `VERSION` in app.js, shown in Settings)
 
 ## Changelog
+- v3.22.0 (2026/11/22): Google login (login screen first, "로그인 없이 사용하기" with guest limitations); signed-in data synced to Cloudflare D1 via the new API Worker (first sign-in uploads this browser's data); creators can share a dialogue or a 문장만들기 training — signed-in members see it read-only under 공유받은 콘텐츠 with their own progress; account section in Settings.
 - v3.21.0 (2026/11/22): 문장만들기 training page = 시안 A — no edit buttons until 편집 (edit mode with ＋챕터/⋯/✎/🗑, rename, 훈련 삭제); progress card and status chapter cards; ＋ speed dial (파트 추가 / 챕터 추가); new add sheet (챕터|파트 tabs, file card with chips, part chips, number stepper, title from file).
 - v3.20.1 (2026/11/22): 문장만들기 test — no auto-focus on the first screen of a test or while the mic is on (moving to another question focuses the first blank only with the mic off).
 - v3.20.0 (2026/11/22): 문장만들기 — parts and chapters in one list on the training page (part = section header with ✎ and ＋ 챕터 만들기); the separate part page is gone.
@@ -155,4 +170,4 @@ Bump on every change: patch = fix/style, minor = new user-facing feature. Update
 
 ## Ideas not built yet
 - Pronunciation scoring (Azure Pronunciation Assessment needs a key + server proxy).
-- Cross-device sync, review of weak sentences (spaced repetition), shadowing mode (auto-play TTS then record), service worker/offline.
+- Review of weak sentences (spaced repetition), shadowing mode (auto-play TTS then record), service worker/offline.
