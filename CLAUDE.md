@@ -137,9 +137,10 @@ Owner's spec (2026/11/22): keep dialogues as 대화, add 문장만들기 as a se
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.23.0 — 2026/11/22** (also `VERSION` in app.js, shown in Settings)
+- **Current version: v3.24.0 — 2026/11/22** (also `VERSION` in app.js, shown in Settings)
 
 ## Changelog
+- v3.24.0 (2026/11/22): 문장만들기 test card — the "+" chunk guide is almost as big as the Korean sentence (21 px, no outline/background, green +) and the 🔑 hint chips are bigger (15 px).
 - v3.23.0 (2026/11/22): 문장만들기 home — 이어서 하기 hero card (last practised unit, or the next unfinished one in that chapter if it is done; ▶ starts/resumes its test) + 3 stat tiles (🔥 day streak · ✏️ answered today · 🏆 units done) above the list; unit/story cards on the chapter page show the completion date (✓ yyyy-MM-dd); shared cards get a blue "공유받음" tag. Google client ID set.
 - v3.22.0 (2026/11/22): Google login (login screen first, "로그인 없이 사용하기" with guest limitations); signed-in data synced to Cloudflare D1 via the new API Worker (first sign-in uploads this browser's data); creators can share a dialogue or a 문장만들기 training — signed-in members see it read-only under 공유받은 콘텐츠 with their own progress; account section in Settings.
 - v3.21.0 (2026/11/22): 문장만들기 training page = 시안 A — no edit buttons until 편집 (edit mode with ＋챕터/⋯/✎/🗑, rename, 훈련 삭제); progress card and status chapter cards; ＋ speed dial (파트 추가 / 챕터 추가); new add sheet (챕터|파트 tabs, file card with chips, part chips, number stepper, title from file).

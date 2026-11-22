@@ -6,7 +6,7 @@ import { unlockAudio, chime, fanfare, startConfetti as confettiOn, stopConfetti 
 import { hub } from "./speech.js";
 import { initSx, sxApplyLang, renderTrainings, newTraining, refreshSharedSx } from "./sx.js";
 import { ls as store, account, sharedContent, refreshShared, logout, onSync } from "./store.js";
-const VERSION = "3.23.0";
+const VERSION = "3.24.0";
 const promptText = () => lang() === "en" ? CONVERT_PROMPT_EN : CONVERT_PROMPT;
 
 /* ================= store (localStorage) ================= */
