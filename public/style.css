@@ -633,3 +633,22 @@ body.v-auth{overflow:hidden}
 .shbar .sw{flex:none;width:42px;height:24px;border-radius:12px;background:var(--line);position:relative;transition:background .2s}
 .shbar .sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .2s}
 .shbar.on .sw{background:var(--blue)} .shbar.on .sw i{transform:translateX(18px)}
+
+/* ================= v3.23: Sentences home (continue card + stats), unit completion date ================= */
+.hero{position:relative;overflow:hidden;border-radius:22px;padding:16px 18px 16px;margin:2px 0 12px;color:#fff;
+  background:linear-gradient(135deg,#58CC02 0%,#2BB673 55%,#1CB0F6 130%);box-shadow:0 5px 0 #3E9A02}
+.hero::after{content:"";position:absolute;right:-30px;top:-40px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.14)}
+.hero-l{font-size:12px;font-weight:900;letter-spacing:.6px;text-transform:uppercase;opacity:.9}
+.hero-t{font-size:13px;font-weight:800;opacity:.92;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-u{font-size:20px;font-weight:900;line-height:1.25;margin-top:2px}
+.hero-f{display:flex;align-items:center;gap:12px;margin-top:14px;position:relative;z-index:1}
+.hero-bar{flex:1;height:10px;border-radius:6px;background:rgba(255,255,255,.3);overflow:hidden}
+.hero-bar i{display:block;height:100%;width:0;background:#fff;border-radius:6px;transition:width .5s}
+.hero-go{flex:none;border:0;border-radius:14px;padding:10px 16px;background:#fff;color:var(--green-d);font:inherit;font-weight:900;font-size:15px;box-shadow:0 4px 0 rgba(0,0,0,.15);cursor:pointer}
+.hero-go:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.15)}
+.hstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 6px}
+.hst{border:2px solid var(--line);border-radius:16px;padding:9px 6px;text-align:center;display:flex;flex-direction:column;gap:1px}
+.hst b{font-size:17px;font-weight:900;color:var(--ink)}
+.hst span{font-size:11px;font-weight:800;color:var(--muted)}
+.shtag.in{color:#fff;background:var(--blue)}
+.udone{margin-left:auto;margin-right:8px;font-size:12px;font-weight:900;color:var(--green-d);background:var(--green-l);border-radius:8px;padding:3px 8px;white-space:nowrap}

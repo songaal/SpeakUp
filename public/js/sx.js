@@ -13,7 +13,7 @@ import { chime, thud, tick, fanfare, unlockAudio, startConfetti, stopConfetti, s
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-const K = { meta: "speakup.sx.v1", best: "speakup.sxbest.v1", pos: "speakup.sxpos.v1", word: "speakup.sxword.v1", input: "speakup.sxinput.v2", auto: "speakup.sxauto.v1", mode: "speakup.mode.v1", sess: "speakup.sxsess.v1", keep: "speakup.sxkeep.v1" };
+const K = { meta: "speakup.sx.v1", best: "speakup.sxbest.v1", pos: "speakup.sxpos.v1", word: "speakup.sxword.v1", input: "speakup.sxinput.v2", auto: "speakup.sxauto.v1", mode: "speakup.mode.v1", sess: "speakup.sxsess.v1", keep: "speakup.sxkeep.v1", done: "speakup.sxdone.v1", act: "speakup.sxact.v1" };
 const ls = {
   get(k, d) { return store.get(k, d); },
   set(k, v) { try { store.set(k, v); } catch (e) { C.toast(t("sxStoreFull")); } },
@@ -26,6 +26,11 @@ let sharedTr = (sharedContent().trainings || []).filter(okTr);
 export function refreshSharedSx() { sharedTr = (sharedContent().trainings || []).filter(okTr); }
 const roTr = tr => !!(tr && tr.owner);
 let best = ls.get(K.best, {});      // "chapterId|itemIndex|questionKey" → best score
+let doneAt = ls.get(K.done, {});  // "chapterId|itemIndex" → ms when every question of the unit/story was first answered (v3.23)
+let act = ls.get(K.act, null); if (!act || typeof act !== "object") act = {};   // {last:{t,p,c,ii,at}, days:{"YYYY-MM-DD": answers}}
+if (!act.days) act.days = {};
+const pad2 = n => String(n).padStart(2, "0");
+const ymd = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
 let sess = ls.get(K.sess, {});      // "chapterId|itemIndex" → unfinished run {pos, res:{qi: score}, start} (이어서)
 // input mode: "type" (keyboard into the blanks — default since v3.18) | "speak" | "block" (word blocks)
 // v3.19: speaking and typing are one mode ("type": blanks you can type into any time + a mic you can turn on
@@ -80,19 +85,71 @@ export function renderTrainings(el) {
   const shHTML = sh.length ? `<div class="secdiv"><span>📚 ${t("sharedSec")}</span><i></i></div>` + sh.map(tr => {
     const nCh = tr.parts.reduce((a, p) => a + (p.chapters || []).length, 0);
     return `<div class="dcard sxcard shared" data-tid="${tr.id}"><span class="dno sh">📚</span>
-      <div class="dmain"><div class="dt">${esc(tr.title)}</div><div class="dm">${t("sxTrainingMeta", tr.parts.length, nCh)}</div><div class="dby">${t("sharedBy", tr.owner.name || "")}</div></div><span class="chev">›</span></div>`;
+      <div class="dmain"><div class="dt">${esc(tr.title)} <span class="shtag in">${t("sharedTag")}</span></div><div class="dm">${t("sxTrainingMeta", tr.parts.length, nCh)}</div><div class="dby">${t("sharedBy", tr.owner.name || "")}</div></div><span class="chev">›</span></div>`;
   }).join("") + `<div class="secdiv"><span>${t("mySec")}</span><i></i></div>` : "";
+  const home = homeHTML();
   if (!list.length) {
-    el.innerHTML = shHTML + `<div class="sx-empty"><div class="sx-empty-ic">🧩</div><b>${t("sxEmptyTitle")}</b><p>${t("sxEmptyBody")}</p><button class="btn pri" id="sxFirst">${t("sxNewTraining")}</button></div>`;
+    el.innerHTML = home + shHTML + `<div class="sx-empty"><div class="sx-empty-ic">🧩</div><b>${t("sxEmptyTitle")}</b><p>${t("sxEmptyBody")}</p><button class="btn pri" id="sxFirst">${t("sxNewTraining")}</button></div>`;
     $("sxFirst").onclick = newTraining;
-    el.querySelectorAll("[data-tid]").forEach(c => c.onclick = () => openTraining(c.dataset.tid)); return;
+    el.querySelectorAll("[data-tid]").forEach(c => c.onclick = () => openTraining(c.dataset.tid)); fillHome(el); return;
   }
-  el.innerHTML = shHTML + list.map((tr, i) => {
+  el.innerHTML = home + shHTML + list.map((tr, i) => {
     const nCh = tr.parts.reduce((a, p) => a + p.chapters.length, 0);
     return `<div class="dcard sxcard" data-tid="${tr.id}"><span class="dno sxno">${list.length - i}</span>
       <div class="dmain"><div class="dt">${esc(tr.title)}${tr.shared ? ` <span class="shtag">${t("sharingTag")}</span>` : ""}</div><div class="dm">${t("sxTrainingMeta", tr.parts.length, nCh)}</div></div><span class="chev">›</span></div>`;
   }).join("");
   el.querySelectorAll("[data-tid]").forEach(c => c.onclick = () => openTraining(c.dataset.tid));
+  fillHome(el);
+}
+
+/* ---- Sentences home (v3.23): 이어서 하기 card + a few small stats, then the list ---- */
+const allTr = () => [...meta.trainings, ...sharedTr];
+function findCh(c) {
+  for (const tr of allTr()) for (const p of tr.parts || []) for (const ch of p.chapters || []) if (ch.id === c) return { tr, p, ch };
+  return null;
+}
+function streak() {
+  let n = 0; const d = new Date();
+  if (!act.days[ymd(d)]) d.setDate(d.getDate() - 1);          // today not practised yet: the streak can still be alive from yesterday
+  while (act.days[ymd(d)]) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+function homeHTML() {
+  const L = act.last && findCh(act.last.c);
+  const today = act.days[ymd(Date.now())] || 0, stk = streak(), nDone = Object.keys(doneAt).filter(k => findCh(k.split("|")[0])).length;
+  const stats = (stk || today || nDone) ? `<div class="hstats">
+      <div class="hst"><b>🔥 ${stk}</b><span>${t("hStreak")}</span></div>
+      <div class="hst"><b>✏️ ${today}</b><span>${t("hToday")}</span></div>
+      <div class="hst"><b>🏆 ${nDone}</b><span>${t("hUnits")}</span></div></div>` : "";
+  const hero = L ? `<div class="hero" id="sxHero"><div class="hero-l">${t("hContinue")}</div>
+      <div class="hero-t" id="sxHeroT">${esc(L.tr.title)} · CH ${esc(L.ch.no)}</div>
+      <div class="hero-u" id="sxHeroU">…</div>
+      <div class="hero-f"><div class="hero-bar"><i id="sxHeroBar"></i></div><button class="hero-go" id="sxHeroGo">▶ ${t("hGo")}</button></div></div>` : "";
+  return hero + stats;
+}
+async function fillHome(el) {
+  const L = act.last && findCh(act.last.c); if (!L || !$("sxHero")) return;
+  let d; try { d = await loadChapter(L.ch); } catch (e) { $("sxHero").remove(); return; }
+  if (!el.isConnected || !$("sxHero")) return;
+  // the last unit, or — if it is finished — the next unit/story in that chapter that isn't
+  const playable = d.items.map((it, i) => [it, i]).filter(([it]) => it.kind !== "tips");
+  let ii = act.last.ii, it = d.items[ii], next = false;
+  const st0 = it && itemStats(L.ch.id, ii, it);
+  if (!it || it.kind === "tips" || (st0.total && st0.done >= st0.total)) {
+    const nx = playable.find(([x, i]) => i > (it ? ii : -1) && (() => { const s = itemStats(L.ch.id, i, x); return !s.total || s.done < s.total; })());
+    if (!nx) { $("sxHero").remove(); return; }
+    [it, ii] = nx; next = true;
+  }
+  const s = itemStats(L.ch.id, ii, it);
+  $("sxHeroU").textContent = it.kind === "unit" ? `${it.no} · ${it.focus}` : itemTitle(it);
+  $("sxHeroBar").style.width = (s.total ? Math.round(s.done / s.total * 100) : 0) + "%";
+  if (next) { $("sxHeroGo").textContent = "▶ " + t("hNext"); $("sxHero").querySelector(".hero-l").textContent = t("hUpNext"); }
+  $("sxHeroGo").onclick = () => {
+    nav = { t: L.tr.id, p: L.p.id, c: L.ch.id, it: ii }; editMode = false;
+    C.showView("sx"); renderSx();
+    const has = sess[`${L.ch.id}|${ii}`];
+    startTest(0, has ? "resume" : "new");
+  };
 }
 export function newTraining() {
   openForm({
@@ -176,12 +233,12 @@ async function renderSx() {
       if (it.kind === "unit") {
         const s = itemStats(ch.id, i, it);
         return `<div class="ucard" data-it="${i}"><div class="ucard-h"><span class="ubadge">${esc(it.no)}</span><span class="ufocus">${esc(it.focus)}</span></div>
-          <div class="ucard-ko">${esc(it.ko)}</div><div class="ucard-f"><span>${t("sxQCount", s.total)}${s.done ? ` · ${t("sxDoneN", s.done)}` : ""}</span>${ring(s.done, s.total)}</div></div>`;
+          <div class="ucard-ko">${esc(it.ko)}</div><div class="ucard-f"><span>${t("sxQCount", s.total)}${s.done ? ` · ${t("sxDoneN", s.done)}` : ""}</span>${doneTag(ch.id, i)}${ring(s.done, s.total)}</div></div>`;
       }
       if (it.kind === "tips") return `<div class="ucard tips" data-it="${i}"><div class="ucard-h"><span class="ubadge tip">💡 WRITING TIPS</span></div><div class="ucard-ko">${esc(it.topic)}</div></div>`;
       const s = itemStats(ch.id, i, it);
       return `<div class="ucard story" data-it="${i}"><div class="ucard-h"><span class="ubadge story">📖 LET'S WRITE A STORY</span></div><div class="ucard-ko">${esc(it.title)}</div>
-        <div class="ucard-f"><span>${t("sxStoryLines", it.prompts.length)}${s.done ? ` · ${t("sxDoneN", s.done)}` : ""}</span>${s.total ? ring(s.done, s.total) : ""}</div></div>`;
+        <div class="ucard-f"><span>${t("sxStoryLines", it.prompts.length)}${s.done ? ` · ${t("sxDoneN", s.done)}` : ""}</span>${doneTag(ch.id, i)}${s.total ? ring(s.done, s.total) : ""}</div></div>`;
     }).join("");
     body.querySelectorAll("[data-it]").forEach(c => c.onclick = () => { nav.it = +c.dataset.it; go(); });
   } else {
@@ -191,6 +248,7 @@ async function renderSx() {
 
   }
 }
+const doneTag = (cid, ii) => { const at = doneAt[`${cid}|${ii}`]; return at ? `<span class="udone">✓ ${ymd(at)}</span>` : ""; };
 const emptyHint = (ic, msg) => `<div class="sx-empty small"><div class="sx-empty-ic">${ic}</div><p>${msg}</p></div>`;
 const hintChips = hs => hs.length ? `<div class="hchips">${hs.map(h => `<span class="hchip">${esc(h)}</span>`).join("")}</div>` : "";
 const slashHTML = s => slashParts(s).map(esc).join(`<i class="sl">/</i>`);
@@ -430,7 +488,8 @@ function dropChapter(ch) {
   delFile(ch.id); cache.delete(ch.id);
   const pre = ch.id + "|";
   Object.keys(best).forEach(k => { if (k.startsWith(pre)) delete best[k]; }); Object.keys(sess).forEach(k => { if (k.startsWith(pre)) delete sess[k]; });
-  ls.set(K.best, best); ls.set(K.sess, sess);
+  Object.keys(doneAt).forEach(k => { if (k.startsWith(pre)) delete doneAt[k]; });
+  ls.set(K.best, best); ls.set(K.sess, sess); ls.set(K.done, doneAt);
 }
 
 // Generic bottom-sheet form. fields: {name, label, type: text|number|file, value, ph, current}
@@ -503,7 +562,7 @@ function startTest(at = 0, how = "new", order = null) {
   const ch = chapterOf(), it = cache.get(ch.id).items[nav.it], qs = questionsOf(it);
   if (!qs.length) return;
   const key = `${ch.id}|${nav.it}`, saved = !order && how !== "new" ? sess[key] : null;
-  S = { cid: ch.id, ii: nav.it, item: it, qs, order: order || qs.map((_, i) => i), pos: 0, res: {}, start: Date.now(), round: order ? 2 : 1 };
+  S = { t: nav.t, p: nav.p, cid: ch.id, ii: nav.it, item: it, qs, order: order || qs.map((_, i) => i), pos: 0, res: {}, start: Date.now(), round: order ? 2 : 1 };
   if (saved) { Object.entries(saved.res || {}).forEach(([qi, sc]) => { if (qs[qi]) S.res[qi] = { kind: "saved", score: sc }; }); S.start = saved.start || S.start; }
   if (how === "new" && !order) { delete sess[key]; ls.set(K.sess, sess); }
   S.pos = Math.max(0, Math.min(S.order.length - 1, order ? 0 : how === "resume" && saved ? saved.pos : at));
@@ -646,6 +705,7 @@ function record(q, qi, res) {
   S.res[qi] = res;
   if (res.score == null) { paintResultPill(res); paintProg(); saveSess(); haptic(15); return; }   // free speaking: nothing to score
   const k = bestKey(S.cid, S.ii, q); if (best[k] == null || res.score > best[k]) { best[k] = res.score; ls.set(K.best, best); }
+  noteActivity();
   paintResultPill(res); paintProg();
   if (res.score === 100) { chime(); haptic(20); } else if (res.kind === "word" || res.kind === "type") { thud(); haptic([10, 40, 10]); }
   const top = $("stStage").querySelector(".qtop .bs"); if (top) top.outerHTML = bsHTML(best[k]);
@@ -656,6 +716,17 @@ function record(q, qi, res) {
     else if (autoNext) rec.gate(true);                            // ignore speech until the next question is up
   }
   if (autoNext && res.score === 100) autoT = setTimeout(() => { if (S && qiOf() === qi) nextQ(); else rec.gate(false); }, 1300);
+}
+
+// v3.23: remember the last unit practised (Sentences home → 이어서 하기), answers per day (streak) and completion dates
+function noteActivity() {
+  const now = Date.now(), day = ymd(now), key = `${S.cid}|${S.ii}`;
+  act.days[day] = (act.days[day] || 0) + 1;
+  const ds = Object.keys(act.days).sort(); if (ds.length > 400) ds.slice(0, ds.length - 400).forEach(d => delete act.days[d]);
+  act.last = { t: S.t, p: S.p, c: S.cid, ii: S.ii, at: now };
+  ls.set(K.act, act);
+  const st = itemStats(S.cid, S.ii, S.item);
+  if (st.total && st.done >= st.total && !doneAt[key]) { doneAt[key] = now; ls.set(K.done, doneAt); }
 }
 
 /* ---- word blocks ---- */

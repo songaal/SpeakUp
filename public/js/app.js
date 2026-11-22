@@ -6,7 +6,7 @@ import { unlockAudio, chime, fanfare, startConfetti as confettiOn, stopConfetti 
 import { hub } from "./speech.js";
 import { initSx, sxApplyLang, renderTrainings, newTraining, refreshSharedSx } from "./sx.js";
 import { ls as store, account, sharedContent, refreshShared, logout, onSync } from "./store.js";
-const VERSION = "3.22.0";
+const VERSION = "3.23.0";
 const promptText = () => lang() === "en" ? CONVERT_PROMPT_EN : CONVERT_PROMPT;
 
 /* ================= store (localStorage) ================= */
@@ -83,7 +83,7 @@ function renderLib() {
     + [...sharedLib].sort((a, b) => (b.created || 0) - (a.created || 0)).map(d => {
       const n = d.lines.length, cnt = countMap[d.id] || 0, last = lastMap[d.id];
       return `<div class="dcard shared" data-id="${d.id}"><span class="dno sh">📚</span>
-        <div class="dmain"><div class="dt">${esc(d.title)}</div>
+        <div class="dmain"><div class="dt">${esc(d.title)} <span class="shtag in">${t("sharedTag")}</span></div>
           <div class="dm">${t("cardMeta", n, cnt, last ? relDate(last) : "")}</div><div class="dby">${t("sharedBy", d.owner.name || "")}</div></div>
         <span class="chev">›</span></div>`;
     }).join("") + `<div class="secdiv"><span>${t("mySec")}</span><i></i></div>` : "";

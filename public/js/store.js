@@ -5,7 +5,7 @@
 // Device settings (language, mic keep, input mode, tab…) are never synced and are not namespaced.
 export const SYNC_KEYS = [
   "speakup.lib.v3", "speakup.best.v3", "speakup.pos.v3", "speakup.count.v3", "speakup.last.v3",
-  "speakup.sx.v1", "speakup.sxbest.v1", "speakup.sxsess.v1",
+  "speakup.sx.v1", "speakup.sxbest.v1", "speakup.sxsess.v1", "speakup.sxdone.v1", "speakup.sxact.v1",
 ];
 const SYNCED = new Set(SYNC_KEYS);
 const ACCT = "speakup.acct.v1";            // cached {id, email, name, picture} of the signed-in user (for offline starts)

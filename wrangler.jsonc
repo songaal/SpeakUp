@@ -21,6 +21,6 @@
   ],
   "vars": {
     // OAuth 2.0 Web client — its "Authorized JavaScript origins" must include https://speakup.kappy.app (and http://localhost:8787 for wrangler dev)
-    "GOOGLE_CLIENT_ID": "REPLACE_WITH_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+    "GOOGLE_CLIENT_ID": "719116381133-drmp1g433dj5qfnhp7u5ujbichl7d0j2.apps.googleusercontent.com"
   }
 }
