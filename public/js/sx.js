@@ -404,7 +404,8 @@ function renderQ(dir) {
   paintProg(); paintMic(); updateHint();
   paintResultPill(r);
   if (rec.listening && typeMode) live({ finalText: "", interim: "", parts: [] });   // mic still on: listening on the new question
-  if (typeMode && !q.noAnswer && !tstate(qi).done) focusSlot(firstOpen(tstate(qi)));   // ready to type in the first blank
+  // ready to type in the first blank — but not on the test's first screen (dir 0) and not while the mic is on (v3.20.1)
+  if (typeMode && dir && !rec.listening && !q.noAnswer && !tstate(qi).done) focusSlot(firstOpen(tstate(qi)));
 }
 const secName = sec => sec === "s1" ? `STEP 1 · ${t("sxSecSteps")}` : sec === "var" ? t("sxSecVarShort") : sec === "s2" ? "STEP 2" : "STORY";
 function paintResultPill(r) {
@@ -672,7 +673,7 @@ function liveType(full, parts, interim, finalText) {
 function resetType() {
   const qi = qiOf(); delete T[qi];
   if (S.res[qi] && S.res[qi].kind === "type") { delete S.res[qi]; paintResultPill(null); paintProg(); }
-  paintType(); focusSlot(0);
+  paintType(); if (!rec.listening) focusSlot(0);
 }
 function typeEvents(stage) {
   const slotOf = e => e.target.classList && e.target.classList.contains("tin") && S && typeMode ? +e.target.dataset.t : -1;
