@@ -4,7 +4,7 @@
 // Content is import-only: the only things typed in are numbers and titles.
 import { t, lang } from "./i18n.js";
 import { tokenize, fillWords, scoreAttempt } from "./core.js";
-import { parseChapter, itemTitle, questionsOf, slashParts, chunksOf, hintList, makeBlocks, checkBlocks, nextBlockHint, numbersFromFilename, typeSlots, checkTyped, nextStop } from "./sxcore.js";
+import { parseChapter, itemTitle, questionsOf, slashParts, chunksOf, hintList, makeBlocks, checkBlocks, nextBlockHint, numbersFromFilename, typeSlots, checkTyped, typedKey, nextStop } from "./sxcore.js";
 import { putFile, getFile, delFile } from "./sxstore.js";
 import { createRecognizer, speechEngine } from "./speech.js";
 import { chime, thud, tick, fanfare, unlockAudio, startConfetti, stopConfetti, say, hush, haptic } from "./fx.js";
@@ -608,6 +608,8 @@ const tph = w => hintLv === 2 ? w : hintLv === 1 ? w.slice(0, 1) : "";
 const twidth = (w, v) => Math.max(w.length, (v || "").length, 2) + 1.2;
 // first blank still to do: empty or red (‑1 = none)
 const firstOpen = s => s.slots.findIndex((_, k) => !s.ok[k] && (!s.vals[k] || s.bad[k]));
+const allFilled = s => s.slots.every((_, k) => s.ok[k] || (s.vals[k] || "").trim());
+let tKeep = false;   // next focus keeps the blank's text (Backspace walking back into it)
 function paintType() {
   const q = qOf(), qi = qiOf(), el = $("stAns"), btn = $("stCheck");
   if (q.noAnswer) { el.innerHTML = `<div class="freebox">${t("sxNoAnsType")}</div>`; btn.disabled = true; btn.classList.remove("next"); return; }
@@ -622,10 +624,10 @@ function tAdvance(k, dir = 1) {
   const s = tstate(qiOf()), n = s.slots.length;
   if (dir < 0) { for (let d = 1; d < n; d++) { const p = (k - d + n) % n; if (!s.ok[p]) { focusSlot(p); return; } } return; }
   for (let d = 1; d < n; d++) { const p = (k + d) % n; if (!s.ok[p] && (!s.vals[p] || s.bad[p])) { focusSlot(p); return; } }
-  if (firstOpen(s) < 0) checkType();
+  if (allFilled(s)) checkType();
 }
 function checkType() {
-  const q = qOf(), qi = qiOf(), s = tstate(qi); if (q.noAnswer || firstOpen(s) >= 0) return;
+  const q = qOf(), qi = qiOf(), s = tstate(qi); if (q.noAnswer || !allFilled(s)) return;
   const r = checkTyped(s.slots.map(x => x.word), s.vals);
   r.ok.forEach((o, k) => { s.ok[k] = s.ok[k] || o; s.bad[k] = !o; });
   s.done = r.ok.every(Boolean);
@@ -649,7 +651,9 @@ function typeEvents(stage) {
   stage.addEventListener("focusin", e => {
     const k = slotOf(e); if (k < 0) return;
     const s = tstate(qiOf()); if (s.ok[k]) return;
-    s.vals[k] = ""; e.target.value = ""; s.bad[k] = false; e.target.classList.remove("bad");   // touch a blank = type it fresh
+    s.bad[k] = false; e.target.classList.remove("bad");
+    if (tKeep) { tKeep = false; const n = e.target.value.length; e.target.setSelectionRange(n, n); return; }   // Backspace came back here: keep the text, delete from the end
+    s.vals[k] = ""; e.target.value = "";   // touch a blank = type it fresh
     e.target.style.width = twidth(s.slots[k].word, "") + "ch";
   });
   stage.addEventListener("input", e => {
@@ -661,6 +665,9 @@ function typeEvents(stage) {
       if (v) { tAdvance(k); return; }
     }
     s.vals[k] = v; e.target.style.width = twidth(s.slots[k].word, v) + "ch";
+    // every blank filled → check right away (once this word is as long as the answer, or already right)
+    const want = typedKey(s.slots[k].word), got = typedKey(v);
+    if (allFilled(s) && (got === want || got.length >= want.length)) checkType();
   });
   stage.addEventListener("keydown", e => {
     const k = slotOf(e); if (k < 0) return;
@@ -668,6 +675,10 @@ function typeEvents(stage) {
       if (e.isComposing) return;
       e.preventDefault(); unlockAudio();
       tAdvance(k, e.key === "Tab" && e.shiftKey ? -1 : 1);
+    } else if (e.key === "Backspace" && !e.target.value && !e.isComposing) {   // empty blank: keep deleting in the previous one
+      e.preventDefault();
+      const s = tstate(qiOf());
+      for (let p = k - 1; p >= 0; p--) if (!s.ok[p]) { tKeep = true; focusSlot(p); tKeep = false; return; }
     } else if (e.key === "Escape") e.target.blur();
   });
 }
