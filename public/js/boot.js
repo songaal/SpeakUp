@@ -4,7 +4,7 @@
 import { boot, config, loginWithGoogle, devLogin, chooseGuest } from "./store.js";
 import { getLocalFile } from "./sxstore.js";
 import { t, setLang, resolveLang, applyStatic } from "./i18n.js";
-const V = "3.24.0";
+const V = "3.25.0";
 const $ = id => document.getElementById(id);
 const startApp = () => import(`./app.js?v=${V}`);
 

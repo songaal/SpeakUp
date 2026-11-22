@@ -7,7 +7,7 @@
 // Env: DB (D1), ASSETS, GOOGLE_CLIENT_ID, DEV_LOGIN ("1" only for local `wrangler dev`).
 
 const SYNC_KEYS = new Set([
-  "speakup.lib.v3", "speakup.best.v3", "speakup.pos.v3", "speakup.count.v3", "speakup.last.v3",
+  "speakup.lib.v3", "speakup.best.v3", "speakup.pos.v3", "speakup.count.v3", "speakup.last.v3", "speakup.days.v3", "speakup.done.v3",
   "speakup.sx.v1", "speakup.sxbest.v1", "speakup.sxsess.v1", "speakup.sxdone.v1", "speakup.sxact.v1",
 ]);
 const SESSION_DAYS = 180;

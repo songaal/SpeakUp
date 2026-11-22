@@ -6,7 +6,10 @@ English-speaking practice web app with two modes (tabs at the top of the library
 - Owner: Sammy (Korean speaker). **Reply to the owner in Korean.**
 - UI language: Korean + English via `public/js/i18n.js` (`t(key, …args)`; static markup uses `data-i18n`, `data-i18n-html`, `data-i18n-title`, `data-i18n-ph`, `data-i18n-aria`). Choice in ⚙︎ 설정: system (default — `navigator.language` ko* → ko, else en) / 한국어 / English, stored in `speakup.lang.v3`. **Every new UI string must be added to both `STR.ko` and `STR.en`.** Script content (titles, sample) is not translated.
 - No zoom (viewport `maximum-scale=1, user-scalable=no`, `touch-action:manipulation`, iOS `gesture*` events blocked, inputs ≥16px so iOS doesn't auto-zoom on focus) while text stays drag-selectable (no `user-select:none` on content).
-- Theme: Duolingo-like (Nunito, green `#58CC02`, chunky bottom-border buttons). Keep it.
+- Theme: Duolingo-like (green `#58CC02`). **Font = Pretendard Variable** (jsDelivr CDN) for everything; Nunito only for the "Speak Up" logo (v3.25, owner: more readable, nothing too small — min ~12.5 px). **Buttons are filled and tonal with a solid bottom edge** (`.btn.pri` green gradient, `.btn.sec` light grey `--btn`/`--btn-d`, danger red, `.iconbtn`/`.chip`/`.nav`/`.fbtn` same idea) — owner hates flat outline-only buttons; never go back to them.
+
+## Routes (v3.25, `public/js/router.js`)
+Every screen has its own address and the browser back button works (`history.pushState`; hash routes inside a claude.ai artifact). `/dlg`, `/sx` (library tab; `/` redirects to the last tab), `/dlg/<id>` (info), `/dlg/<id>/play` (player, starts at `posMap`), `/sx/<training>[/<chapter>[/<item>[/test]]]`, `/settings`. `history.state.d` = depth, so `back(fallback)` goes back inside the app or replaces with the parent path after a deep link. app.js `onRoute` handles dlg/settings, `sx.js` `sxRoute()` the rest; buttons call `go(path)` (tabs use `replace`). Asset URLs in index.html are absolute (`/style.css`, `/js/boot.js`, `/icons/…`) so deep links load. Leaving the player/test stops the mic (`showView` → `leavePlayer` / `sxLeave`).
 
 ## Accounts, sync, sharing (v3.22)
 Owner's spec (2026/11/22): Google login; content the **creator** marks as shared can be used by every signed-in member; sharing is set only on the top item (대화 = each dialogue, 문장만들기 = each 훈련 — parts/chapters follow it); progress is per user.
@@ -45,6 +48,13 @@ tests/sx.test.mjs        node:test suite for sxcore.js (inline fixture — don't
 src/worker.js            API Worker: Google sign-in, sessions, per-user sync, files, shared content (D1)
 wrangler.jsonc           Cloudflare Worker (assets + /api/* Worker, D1 `speakup`, custom domain speakup.kappy.app)
 ```
+
+## v3.25 changes (supersede older notes below where they differ)
+- **Library header** = logo + ⚙︎ only (global, both tabs). Dialogue-only tools sit inside the 대화 tab under the tabs (`#dlgTools`): 📋 프롬프트 · ⤓ 내보내기 (all dialogues; was in Settings) · ✎ 편집.
+- **대화 home** (`#dlgHome`, `renderDlgHome`): gradient hero "이어서 하기" (last practised dialogue by `lastMap`; if finished → "다음 차례" = most recent unfinished one; ▶ opens the player at `posMap`) + 3 tiles 🔥 day streak · ✏️ lines today · 🏆 dialogues done. New synced keys `speakup.days.v3` {"YYYY-MM-DD": lines answered} and `speakup.done.v3` {dialogId: ms when every line had been answered}.
+- **Player = same answer UI as 문장만들기, script layout kept** (owner's choice): the current line shows Korean + `.qans` with ⌨️🎤 blanks (type any time; mic is an on/off switch that stays on across lines, every word heard fills its blank green) or 🧩 word blocks (tap / hold-drag). Picker `#pInMode` top-right, shares `speakup.sxinput.v2` with 문장만들기. Dock: ‹ 🎤 ✓ › with floating 🔊 💡 ↺. All right → chime and straight to the next line (no ⏭ 자동/유지/✅ 완료 chips any more); › after the last line visits unanswered lines (`nextStop`), none left → 🏆 finish screen **without score** (sentences, time, quote). Uses `speech.js` `createRecognizer` (the old app.js engine is gone; the artifact branch still sets `hub.dictation`). **No scores anywhere in 대화**: info list and past lines show ✓ (all right once) / • (tried); `best` is still stored.
+- **Sharing switch only inside edit screens** (owner: no accidental toggling): dialogue → ✎ 수정 sheet (`#edShare`, saved with 저장); training → 편집 mode. Elsewhere only a "🔗 공유 중" status label.
+- **Settings = full page** `#setView` (`/settings`): gradient profile card (avatar, name, email, sync chip; guests get an orange card + Google login button), language segmented control (자동 / 한국어 / English), list rows 로그아웃 / 버전.
 
 ## Views (app.js)
 `library` → tap card → `info` (stats tiles: sentences / words / 연습한 문장 = total scored attempts for this dialogue; Start / Resume buttons right under the stats; full text list with best % per line) → `player`.
@@ -137,9 +147,10 @@ Owner's spec (2026/11/22): keep dialogues as 대화, add 문장만들기 as a se
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.24.0 — 2026/11/22** (also `VERSION` in app.js, shown in Settings)
+- **Current version: v3.25.0 — 2026/11/22** (also `VERSION` in app.js, shown in Settings)
 
 ## Changelog
+- v3.25.0 (2026/11/22): 대화 player answers like 문장만들기 (⌨️🎤 blanks + mic fills, 🧩 blocks, auto-next, no scores, 🏆 without score); 대화 home (이어서 하기 + streak/today/done); prompt/export/edit moved into the 대화 tab, ⚙︎ global; settings as a full trendy page; unique URL per screen + back button; Pretendard font, bigger small text; filled 3D buttons app-wide; share switch only in edit screens.
 - v3.24.0 (2026/11/22): 문장만들기 test card — the "+" chunk guide is almost as big as the Korean sentence (21 px, no outline/background, green +) and the 🔑 hint chips are bigger (15 px).
 - v3.23.0 (2026/11/22): 문장만들기 home — 이어서 하기 hero card (last practised unit, or the next unfinished one in that chapter if it is done; ▶ starts/resumes its test) + 3 stat tiles (🔥 day streak · ✏️ answered today · 🏆 units done) above the list; unit/story cards on the chapter page show the completion date (✓ yyyy-MM-dd); shared cards get a blue "공유받음" tag. Google client ID set.
 - v3.22.0 (2026/11/22): Google login (login screen first, "로그인 없이 사용하기" with guest limitations); signed-in data synced to Cloudflare D1 via the new API Worker (first sign-in uploads this browser's data); creators can share a dialogue or a 문장만들기 training — signed-in members see it read-only under 공유받은 콘텐츠 with their own progress; account section in Settings.

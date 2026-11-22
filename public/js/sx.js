@@ -8,6 +8,7 @@ import { parseChapter, itemTitle, questionsOf, slashParts, chunksOf, hintList, m
 import { putFile, getFile, delFile } from "./sxstore.js";
 import { ls as store, account, sharedContent } from "./store.js";
 import { createRecognizer, speechEngine } from "./speech.js";
+import * as Rt from "./router.js";
 import { chime, thud, tick, fanfare, unlockAudio, startConfetti, stopConfetti, say, hush, haptic } from "./fx.js";
 
 const $ = id => document.getElementById(id);
@@ -49,10 +50,35 @@ function paintTabs() {
   document.body.dataset.mode = mode;
   document.querySelectorAll("#modeTabs [data-mode]").forEach(b => { const on = b.dataset.mode === mode; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
 }
-function setMode(m) {
-  if (m === mode) return;
+function setMode(m) { if (m !== mode) Rt.go("/" + m, { replace: true }); }
+// called by the router for /dlg and /sx
+export function setTabMode(m) {
+  if (m === mode) { paintTabs(); return; }
   transition(() => { mode = m; ls.set(K.mode, m); paintTabs(); C.renderLib(); });
 }
+/* ---- routes (v3.25): /sx/<training>[/<chapter>[/<item>[/test]]] ---- */
+const pathOf = (n = nav) => "/sx/" + [n.t, n.c, n.it].filter(x => x != null).join("/");
+let pendingStart = null;   // {at, how} from a button, used when the /test route opens
+export function sxLeave() { stopTest(true); stopConfetti($("stConfetti")); $("stResult").classList.remove("show"); }
+export async function sxRoute([tid, cid, ii, test]) {
+  const tr = meta.trainings.find(x => x.id === tid) || sharedTr.find(x => x.id === tid);
+  if (!tr) { Rt.go("/sx", { replace: true }); return; }
+  let p = null, ch = null;
+  if (cid) for (const pt of tr.parts || []) { const c = (pt.chapters || []).find(x => x.id === cid); if (c) { p = pt; ch = c; break; } }
+  if (cid && !ch) { Rt.go("/sx/" + tid, { replace: true }); return; }
+  const it = ii != null && ii !== "" && !isNaN(+ii) ? +ii : null;
+  if (nav.t !== tid) editMode = false;
+  nav = { t: tid, p: p && p.id, c: ch && ch.id, it };
+  if (test === "test" && ch && it != null) {
+    try { await loadChapter(ch); } catch (e) { Rt.go(pathOf(), { replace: true }); return; }
+    const ps = pendingStart; pendingStart = null;
+    startTest(ps ? ps.at : 0, ps ? ps.how : (sess[`${ch.id}|${it}`] ? "resume" : "new"));
+    return;
+  }
+  if (C.view() === "st") sxLeave();
+  transition(() => { C.showView("sx"); renderSx(); $("sxScroll").scrollTop = 0; });
+}
+const openTest = (at, how) => { pendingStart = { at, how }; Rt.go(pathOf() + "/test"); };
 
 /* ================= tree helpers ================= */
 let nav = { t: null, p: null, c: null, it: null };
@@ -145,10 +171,7 @@ async function fillHome(el) {
   $("sxHeroBar").style.width = (s.total ? Math.round(s.done / s.total * 100) : 0) + "%";
   if (next) { $("sxHeroGo").textContent = "▶ " + t("hNext"); $("sxHero").querySelector(".hero-l").textContent = t("hUpNext"); }
   $("sxHeroGo").onclick = () => {
-    nav = { t: L.tr.id, p: L.p.id, c: L.ch.id, it: ii }; editMode = false;
-    C.showView("sx"); renderSx();
-    const has = sess[`${L.ch.id}|${ii}`];
-    startTest(0, has ? "resume" : "new");
+    Rt.go(`/sx/${L.tr.id}/${L.ch.id}/${ii}/test`);
   };
 }
 export function newTraining() {
@@ -162,7 +185,7 @@ export function newTraining() {
     },
   });
 }
-function openTraining(id) { nav = { t: id, p: null, c: null, it: null }; editMode = false; go(); }
+function openTraining(id) { Rt.go("/sx/" + id); }
 
 /* ================= sx view (training / part / chapter / item) ================= */
 function go(dir = "fwd") {
@@ -171,12 +194,10 @@ function go(dir = "fwd") {
 }
 function back() {
   const l = level();
-  if (l === "item") nav.it = null; else if (l === "chapter") { nav.c = null; nav.p = null; }
-  else { transition(() => { C.showView("lib"); C.renderLib(); }); return; }
-  go("back");
+  Rt.back(l === "item" ? pathOf({ ...nav, it: null }) : l === "chapter" ? "/sx/" + nav.t : "/sx");
 }
 async function renderSx() {
-  const tr = trainingOf(); if (!tr) { C.showView("lib"); C.renderLib(); return; }
+  const tr = trainingOf(); if (!tr) { Rt.go("/sx", { replace: true }); return; }
   const l = level(), p = partOf(), ch = chapterOf(), body = $("sxBody");
   const crumb = [tr.title, p && `PART ${p.no}`, ch && `CH ${ch.no}`].filter(Boolean);
   $("sxCrumb").textContent = crumb.slice(0, -1).join(" › ") || t("sxTraining");
@@ -195,7 +216,7 @@ async function renderSx() {
     const parts = [...tr.parts].sort(byNo), chs = [];
     parts.forEach(pt => [...pt.chapters].sort(byNo).forEach(c => chs.push(c)));
     const shareBar = ro ? `<div class="shbar ro">📚 ${t("sharedBy", tr.owner.name || "")} · ${t("readOnly")}</div>`
-      : account() ? `<button class="shbar ${tr.shared ? "on" : ""}" id="sxShareTgl"><span class="sw"><i></i></span><span>${tr.shared ? t("shareOnTr") : t("shareOffTr")}</span></button>` : "";
+      : tr.shared ? `<div class="shstat">🔗 ${t("sharingNow")}</div>` : "";
     if (editMode) body.innerHTML = trainingEditHTML(tr, parts);
     else body.innerHTML = shareBar + (chs.length ? `<div class="trprog"><span>${t("sxProgLbl")}</span><div class="trbar"><i id="sxProgBar" style="width:0%"></i></div><b id="sxProgTxt"></b></div>` : "")
       + (parts.length ? parts.map(pt => `<div class="pdiv"><span class="pno">PART ${esc(pt.no)}</span><b>${esc(pt.title)}</b><i></i></div>`
@@ -204,11 +225,8 @@ async function renderSx() {
             <svg class="chev2" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`).join("")
           || `<div class="pempty">${t("sxNoChaptersYet")}</div>`)).join("")
       : emptyHint("📚", t("sxNoParts")));
-    body.querySelectorAll(".chcard[data-cid]").forEach(c => c.onclick = () => { nav.p = c.dataset.pc; nav.c = c.dataset.cid; go(); });
+    body.querySelectorAll(".chcard[data-cid]").forEach(c => c.onclick = () => Rt.go(`/sx/${nav.t}/${c.dataset.cid}`));
     if (editMode) { wireTrainingEdit(tr, body); return; }
-    if ($("sxShareTgl")) $("sxShareTgl").onclick = () => {
-      tr.shared = !tr.shared; if (!tr.shared) delete tr.shared; saveMeta(); renderSx(); C.renderLib(); C.toast(tr.shared ? t("sharedToast") : t("unsharedToast"));
-    };
     if (!ro) { fab.style.display = ""; fab.classList.add("round"); } $("sxFabLbl").textContent = ""; fab.onclick = toggleDial;
     let qT = 0, qD = 0, cDone = 0, left = chs.length;
     for (const c of chs) {   // status per chapter once its file is read
@@ -240,9 +258,11 @@ async function renderSx() {
       return `<div class="ucard story" data-it="${i}"><div class="ucard-h"><span class="ubadge story">📖 LET'S WRITE A STORY</span></div><div class="ucard-ko">${esc(it.title)}</div>
         <div class="ucard-f"><span>${t("sxStoryLines", it.prompts.length)}${s.done ? ` · ${t("sxDoneN", s.done)}` : ""}</span>${doneTag(ch.id, i)}${s.total ? ring(s.done, s.total) : ""}</div></div>`;
     }).join("");
-    body.querySelectorAll("[data-it]").forEach(c => c.onclick = () => { nav.it = +c.dataset.it; go(); });
+    body.querySelectorAll("[data-it]").forEach(c => c.onclick = () => Rt.go(`/sx/${nav.t}/${nav.c}/${c.dataset.it}`));
   } else {
-    const d = cache.get(ch.id), it = d && d.items[nav.it]; if (!it) { nav.it = null; renderSx(); return; }
+    let d; try { d = await loadChapter(ch); } catch (e) { body.innerHTML = emptyHint("⚠️", t("sxFileMissing")); return; }
+    if (level() !== "item" || chapterOf() !== ch) return;
+    const it = d && d.items[nav.it]; if (!it) { Rt.go(pathOf({ ...nav, it: null }), { replace: true }); return; }
     $("sxTitle").textContent = it.kind === "unit" ? `${it.no} · ${it.focus}` : itemTitle(it);
     body.innerHTML = it.kind === "unit" ? unitHTML(ch.id, nav.it, it) : it.kind === "tips" ? tipsHTML(it) : storyHTML(ch.id, nav.it, it);
 
@@ -341,6 +361,7 @@ const ICON = {
 };
 function trainingEditHTML(tr, parts) {
   return `<button class="trname" id="sxTrName"><span>${esc(tr.title)}</span>${ICON.pen}</button>`
+    + (account() ? `<button class="shbar ${tr.shared ? "on" : ""}" id="sxShareTgl"><span class="sw"><i></i></span><span>${tr.shared ? t("shareOnTr") : t("shareOffTr")}</span></button>` : "")
     + parts.map(pt => `<div class="eprow"><span class="pno">PART ${esc(pt.no)}</span><b>${esc(pt.title)}</b>
         <button class="eadd" data-padd="${pt.id}">${ICON.plus}${t("sxTabCh")}</button><button class="eic" data-pedit="${pt.id}" aria-label="${esc(t("sxEditPart"))}">${ICON.dots}</button></div>`
       + [...pt.chapters].sort(byNo).map(c => `<div class="ecrow"><div class="chmain"><span class="cht">CH ${esc(c.no)} · ${esc(c.title)}</span><span class="chm">${esc(c.file || "")}</span></div>
@@ -351,6 +372,9 @@ function trainingEditHTML(tr, parts) {
 function wireTrainingEdit(tr, body) {
   const P = id => tr.parts.find(x => x.id === id);
   $("sxTrName").onclick = renameTraining;
+  if ($("sxShareTgl")) $("sxShareTgl").onclick = () => {   // 공유 only in 편집 mode (owner: no accidental toggling)
+    tr.shared = !tr.shared; if (!tr.shared) delete tr.shared; saveMeta(); renderSx(); C.toast(tr.shared ? t("sharedToast") : t("unsharedToast"));
+  };
   body.querySelectorAll("[data-padd]").forEach(b => b.onclick = () => openAdd("ch", b.dataset.padd));
   body.querySelectorAll("[data-pedit]").forEach(b => b.onclick = () => editPart(P(b.dataset.pedit)));
   body.querySelectorAll("[data-cedit]").forEach(b => b.onclick = () => { const p = P(b.dataset.pc); editChapter(tr, p, p.chapters.find(c => c.id === b.dataset.cedit)); });
@@ -363,7 +387,7 @@ function wireTrainingEdit(tr, body) {
   $("sxEDelTr").onclick = async () => {
     if (!await C.ask(t("sxConfirmDelTraining", tr.title))) return;
     tr.parts.forEach(pt => pt.chapters.forEach(dropChapter)); meta.trainings = meta.trainings.filter(x => x !== tr); saveMeta();
-    nav = { t: null, p: null, c: null, it: null }; editMode = false; C.showView("lib"); C.renderLib(); C.toast(t("deleted"));
+    nav = { t: null, p: null, c: null, it: null }; editMode = false; Rt.go("/sx", { replace: true }); C.toast(t("deleted"));
   };
 }
 // ＋ speed dial (training page): 파트 추가 / 챕터 추가 (JSON)
@@ -453,7 +477,7 @@ function renameTraining() {
     onDelete: async () => {
       if (!await C.ask(t("sxConfirmDelTraining", tr.title))) return false;
       tr.parts.forEach(pt => pt.chapters.forEach(dropChapter)); meta.trainings = meta.trainings.filter(x => x !== tr); saveMeta();
-      nav = { t: null, p: null, c: null, it: null }; C.showView("lib"); C.renderLib(); C.toast(t("deleted"));
+      nav = { t: null, p: null, c: null, it: null }; Rt.go("/sx", { replace: true }); C.toast(t("deleted"));
     },
   });
 }
@@ -480,7 +504,7 @@ function editChapter(tr, p, ch) {
     },
     onDelete: async () => {
       if (!await C.ask(t("sxConfirmDelChapter", ch.no, ch.title))) return false;
-      dropChapter(ch); p.chapters = p.chapters.filter(x => x !== ch); saveMeta(); nav.c = null; nav.p = null; renderSx(); C.toast(t("deleted"));
+      dropChapter(ch); p.chapters = p.chapters.filter(x => x !== ch); saveMeta(); Rt.go("/sx/" + nav.t, { replace: true }); C.toast(t("deleted"));
     },
   });
 }
@@ -578,10 +602,7 @@ function saveSess() {
   sess[`${S.cid}|${S.ii}`] = { pos: S.pos, res, start: S.start }; ls.set(K.sess, sess);
 }
 function stopTest() { if (rec.listening) rec.stop(true); clearTimeout(autoT); clearTimeout(silenceT); hush(); }
-function quitTest() {
-  stopTest(true); stopConfetti($("stConfetti"));
-  transition(() => { C.showView("sx"); renderSx(); });
-}
+function quitTest() { Rt.back(pathOf()); }
 
 function paintMode() {
   $("stView").classList.toggle("wordmode", wordMode); $("stView").classList.toggle("typemode", typeMode);
@@ -1007,9 +1028,9 @@ export function initSx(ctx) {
   $("sxAdd").addEventListener("click", e => { if (e.target.id === "sxAdd") $("sxAdd").classList.remove("show"); });
   // item page: one delegated handler (rows of every section, 테스트, 이어서)
   const openRow = e => {
-    if (e.target.closest("#sxStart")) { startTest(0, "new"); return true; }
-    if (e.target.closest("#sxResume")) { startTest(0, "resume"); return true; }
-    const li = e.target.closest("[data-q]"); if (li && level() === "item") { startTest(+li.dataset.q, "row"); return true; }
+    if (e.target.closest("#sxStart")) { openTest(0, "new"); return true; }
+    if (e.target.closest("#sxResume")) { openTest(0, "resume"); return true; }
+    const li = e.target.closest("[data-q]"); if (li && level() === "item") { openTest(+li.dataset.q, "row"); return true; }
     return false;
   };
   $("sxBody").addEventListener("click", openRow);
