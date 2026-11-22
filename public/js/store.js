@@ -1,6 +1,5 @@
 // Speak Up — storage + account + server sync (v3.22).
-// Guest: data stays under the plain localStorage keys (same as before v3.22).
-// Signed in: the synced keys live under "speakup.u.<userId>." + key (a local cache), every set() is pushed to the
+// Sign-in is required (v3.26). The synced keys live under "speakup.u.<userId>." + key (a local cache), every set() is pushed to the
 // server (debounced; pending keys survive reloads/offline), and boot() pulls the server copy before the app starts.
 // Device settings (language, mic keep, input mode, tab…) are never synced and are not namespaced.
 export const SYNC_KEYS = [
@@ -9,7 +8,6 @@ export const SYNC_KEYS = [
 ];
 const SYNCED = new Set(SYNC_KEYS);
 const ACCT = "speakup.acct.v1";            // cached {id, email, name, picture} of the signed-in user (for offline starts)
-const GUEST_OK = "speakup.guest.v1";       // "1" once the guest screen was passed in this tab (sessionStorage)
 
 let acct = null;
 export const account = () => acct;
@@ -119,29 +117,30 @@ export async function devLogin(email) {
 export async function logout() {
   try { await flush(); } catch (e) {}
   try { await api("/api/logout", { method: "POST" }); } catch (e) {}
-  try { localStorage.removeItem(ACCT); sessionStorage.removeItem(GUEST_OK); } catch (e) {}
-  location.reload();
+  try { localStorage.removeItem(ACCT); } catch (e) {}
+  location.href = "/";
 }
-export const guestChosen = () => { try { return sessionStorage.getItem(GUEST_OK) === "1"; } catch (e) { return false; } };
-export const chooseGuest = () => { try { sessionStorage.setItem(GUEST_OK, "1"); } catch (e) {} };
-
-// Copy this browser's guest data into a new account (first sign-in, account empty on the server).
-async function migrateGuest(getLocal) {
-  const keys = {};
-  for (const k of SYNC_KEYS) { const v = rawGet(k); if (v != null) { keys[k] = v; rawSet(pfx() + k, v); } }
-  if (!Object.keys(keys).length) return;
-  pendSet(Object.keys(keys)); await flush();
-  try {   // chapter files referenced by the guest tree
-    const sx = JSON.parse(keys["speakup.sx.v1"] || "null");
-    for (const tr of (sx && sx.trainings) || []) for (const p of tr.parts || []) for (const c of p.chapters || []) {
-      const text = await getLocal(c.id); if (text != null) await remotePutFile(c.id, text);
-    }
-  } catch (e) {}
+// v3.26: sign-in is required. Data a browser kept from the old guest mode (plain keys + IndexedDB files) is
+// removed once; it is never copied into an account.
+const GUEST_WIPED = "speakup.guestWiped.v1";
+async function wipeGuest(clearFiles) {
+  if (rawGet(GUEST_WIPED)) return;
+  try { for (const k of SYNC_KEYS) localStorage.removeItem(k); Object.keys(localStorage).filter(k => k.startsWith("speakup.sxfile.")).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+  try { await clearFiles(); } catch (e) {}        // account files are fetched again from the server when needed
+  try { sessionStorage.removeItem("speakup.guest.v1"); rawSet(GUEST_WIPED, "1"); } catch (e) {}
+}
+// Delete everything this account has on the server (data, files, shared items) and its copy on this device.
+export async function wipeAccount(clearFiles) {
+  const r = await fetch("/api/data", { method: "DELETE", credentials: "same-origin" });
+  if (!r.ok) throw new Error(r.status);
+  try { Object.keys(localStorage).filter(k => k.startsWith(pfx())).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+  try { await clearFiles(); } catch (e) {}
 }
 
-// Decide who is using the app. Returns {user} (signed in), {guest:true}, or {needLogin:true}.
-// getLocal(id) reads a chapter file from IndexedDB (passed in to avoid an import cycle with sxstore.js).
-export async function boot(getLocal) {
+// Decide who is using the app. Returns {user} (signed in) or {needLogin:true}.
+// getLocal(id) reads a chapter file from IndexedDB, clearFiles() empties it (passed in to avoid an import cycle).
+export async function boot(getLocal, clearFiles) {
+  await wipeGuest(clearFiles);
   let cached = null; try { cached = JSON.parse(rawGet(ACCT) || "null"); } catch (e) {}
   let user = null, offline = false;
   try {
@@ -150,7 +149,7 @@ export async function boot(getLocal) {
     else if (r.status >= 500 || r.status === 404) offline = true;   // API not deployed / broken → behave like offline
   } catch (e) { offline = true; }
   if (!user && offline && cached) user = cached;
-  if (!user) { try { localStorage.removeItem(ACCT); } catch (e) {} return guestChosen() ? { guest: true } : { needLogin: true }; }
+  if (!user) { try { localStorage.removeItem(ACCT); } catch (e) {} return { needLogin: true, offline }; }
   acct = { id: user.id, email: user.email, name: user.name, picture: user.picture };
   try { rawSet(ACCT, JSON.stringify(acct)); } catch (e) {}
   if (!offline) {
@@ -160,9 +159,7 @@ export async function boot(getLocal) {
       const r = await api("/api/data", {}, 15000);
       if (r.ok) {
         const d = await r.json(), have = Object.keys(d.keys || {});
-        if (!have.length && !d.files && !rawGet(pfx() + "migrated")) { await migrateGuest(getLocal); }
-        else { const pend = new Set(pendGet()); for (const k of have) if (!pend.has(k)) rawSet(pfx() + k, d.keys[k].v); }
-        rawSet(pfx() + "migrated", "1");
+        const pend = new Set(pendGet()); for (const k of have) if (!pend.has(k)) rawSet(pfx() + k, d.keys[k].v);
       }
     } catch (e) {}
     await loadShared();

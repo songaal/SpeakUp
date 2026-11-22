@@ -141,15 +141,16 @@ Owner's spec (2026/11/22): keep dialogues as 대화, add 문장만들기 as a se
 - Give every screen generous bottom space (owner found the bottoms cramped): player dock `40px + safe-area`, sheets `32px`, library bottom padding leaves room for the FAB, info `48px`, finish `44px`.
 
 - Info page: no "perfect sentences" progress box and no unique-word / average-length stats (owner removed them); Start sits where the progress box was.
-- ~~No login~~ (2026/11/19) → superseded 2026/11/22: Google login + server sync + sharing (v3.22). Guests can still use the app (local only), but the login screen is always shown first.
+- ~~No login~~ (2026/11/19) → superseded 2026/11/22: Google login + server sync + sharing (v3.22); **v3.26: sign-in is required, no guest mode** (owner). The guest-mode / migration notes in "Accounts, sync, sharing" are obsolete.
 - Sharing is decided by the **creator** of the content, not an admin (owner corrected this).
 - Player dock: chips row **above** the mic row (owner taps them a lot): 💡 힌트 · 🔊 듣기 · ⏭ 자동 · ✅ 완료 (one non-wrapping row), then ‹ mic 유지 ›. About 170 px tall with ~30 px bottom padding so the mic isn't glued to the bottom edge — not cramped, not the original ~200 px. No slow-TTS, no pause chip, no engine/hint text lines.
 
 ## Versioning
 Bump on every change: patch = fix/style, minor = new user-facing feature. Update `package.json` version, the `?v=` cache-busters in `public/index.html`, and add a changelog line.
-- **Current version: v3.25.0 — 2026/11/22** (also `VERSION` in app.js, shown in Settings)
+- **Current version: v3.26.0 — 2026/11/22** (also `VERSION` in app.js, shown in Settings)
 
 ## Changelog
+- v3.26.0 (2026/11/22): sign-in required — no guest mode (login screen has only Google sign-in; claude.ai artifact preview still runs locally). Old guest data in a browser (plain keys + IndexedDB files) is deleted once on boot (`speakup.guestWiped.v1`) and never copied into an account (first-sign-in migration removed). Settings › 내 데이터 모두 삭제 (asks twice) → `DELETE /api/data` (kv, files, shared rows) + clears this device's copy; the list then starts empty (no sample).
 - v3.25.0 (2026/11/22): 대화 player answers like 문장만들기 (⌨️🎤 blanks + mic fills, 🧩 blocks, auto-next, no scores, 🏆 without score); 대화 home (이어서 하기 + streak/today/done); prompt/export/edit moved into the 대화 tab, ⚙︎ global; settings as a full trendy page; unique URL per screen + back button; Pretendard font, bigger small text; filled 3D buttons app-wide; share switch only in edit screens.
 - v3.24.0 (2026/11/22): 문장만들기 test card — the "+" chunk guide is almost as big as the Korean sentence (21 px, no outline/background, green +) and the 🔑 hint chips are bigger (15 px).
 - v3.23.0 (2026/11/22): 문장만들기 home — 이어서 하기 hero card (last practised unit, or the next unfinished one in that chapter if it is done; ▶ starts/resumes its test) + 3 stat tiles (🔥 day streak · ✏️ answered today · 🏆 units done) above the list; unit/story cards on the chapter page show the completion date (✓ yyyy-MM-dd); shared cards get a blue "공유받음" tag. Google client ID set.

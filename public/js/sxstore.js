@@ -37,6 +37,7 @@ export async function getFile(id) {
   const r = await remoteGetFile(id); if (r != null) { try { await putLocal(id, r); } catch (e) {} }
   return r;
 }
+export async function clearFiles() { await tx("readwrite", s => s.clear()); }
 export async function delFile(id) {
   try { await tx("readwrite", s => s.delete(id)); } catch (e) {}
   try { localStorage.removeItem(LS(id)); } catch (e) {}

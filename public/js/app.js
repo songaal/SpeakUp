@@ -7,8 +7,9 @@ import { unlockAudio, chime, thud, tick, haptic, say, hush, fanfare, startConfet
 import { hub, createRecognizer, speechEngine } from "./speech.js";
 import { go, back as goBack, onRoute, dispatch } from "./router.js";
 import { initSx, sxApplyLang, renderTrainings, newTraining, refreshSharedSx, sxRoute, sxLeave, mode as sxMode, setTabMode } from "./sx.js";
-import { ls as store, account, sharedContent, refreshShared, logout, onSync } from "./store.js";
-const VERSION = "3.25.0";
+import { ls as store, account, sharedContent, refreshShared, logout, onSync, wipeAccount, flush } from "./store.js";
+import { clearFiles } from "./sxstore.js";
+const VERSION = "3.26.0";
 const promptText = () => lang() === "en" ? CONVERT_PROMPT_EN : CONVERT_PROMPT;
 
 /* ================= store (localStorage) ================= */
@@ -671,7 +672,7 @@ function paintSettings() {
     b.innerHTML = `<div class="pcard">${me.picture ? `<img class="pc-av" src="${esc(me.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="pc-av">${esc((me.name || me.email || "?").slice(0, 1))}</span>`}
       <div class="pc-tx"><b>${esc(me.name || "")}</b><span>${esc(me.email || "")}</span><em id="syncTxt"></em></div></div>`;
   }
-  $("logoutRow").style.display = me ? "" : "none";
+  $("logoutRow").style.display = $("wipeRow").style.display = me ? "" : "none";
   paintSync(); paintLangSeg();
 }
 let syncSt = "ok";
@@ -680,6 +681,12 @@ if (me) onSync(s => { syncSt = s; paintSync(); });
 $("settingsBtn").onclick = () => go("/settings");
 $("setBack").onclick = () => goBack("/" + sxMode);
 $("logoutRow").onclick = async () => { if (await ask(t("acctLogoutQ"), t("acctLogout"))) logout(); };
+// v3.26: delete everything of this account (server + this device), asked twice
+$("wipeRow").onclick = async () => {
+  if (!me || !await ask(t("wipeQ1"), t("wipeGo"))) return;
+  if (!await ask(t("wipeQ2"), t("wipeGo"))) return;
+  try { await wipeAccount(clearFiles); ls.set(K.lib, []); await flush(); location.href = "/"; } catch (e) { toast(t("wipeFail")); }   // empty list, no sample
+};
 $("langSeg").addEventListener("click", e => { const b = e.target.closest("[data-lang]"); if (!b) return; setLangChoice(b.dataset.lang); paintLangSeg(); applyLang(); });
 
 // No zoom: iOS Safari ignores user-scalable=no for pinch, so block its gesture events (text selection is unaffected).

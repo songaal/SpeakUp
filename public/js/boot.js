@@ -1,10 +1,10 @@
 // Speak Up — entry (v3.22). Works out who is using the app before app.js reads any storage:
 // signed in → pull the server copy into the per-account cache; not signed in → the login screen
-// (Google button + small "로그인 없이 사용하기" with the guest limitations). Then app.js is loaded.
-import { boot, config, loginWithGoogle, devLogin, chooseGuest } from "./store.js";
-import { getLocalFile } from "./sxstore.js";
+// (Google button; sign-in is required since v3.26). Then app.js is loaded.
+import { boot, config, loginWithGoogle, devLogin } from "./store.js";
+import { getLocalFile, clearFiles } from "./sxstore.js";
 import { t, setLang, resolveLang, applyStatic } from "./i18n.js";
-const V = "3.25.0";
+const V = "3.26.0";
 const $ = id => document.getElementById(id);
 const startApp = () => import(`./app.js?v=${V}`);
 
@@ -21,14 +21,12 @@ function authErr(m) { const e = $("authErr"); e.textContent = m; e.classList.tog
 async function showLogin() {
   setLang(resolveLang()); applyStatic($("authView"));
   document.body.classList.add("v-auth"); $("authView").classList.add("on");
-  $("authGuest").onclick = () => { $("authGuestBox").classList.toggle("open"); };
-  $("authGuestGo").onclick = () => { chooseGuest(); $("authView").classList.remove("on"); document.body.classList.remove("v-auth"); startApp(); };
   const cfg = await config();
   if (cfg.devLogin) {   // local `wrangler dev` only
     $("authDev").style.display = "";
     $("authDevGo").onclick = async () => { try { await devLogin($("authDevEmail").value); location.reload(); } catch (e) { authErr(String(e.message || e)); } };
   }
-  if (!cfg.clientId || /REPLACE_WITH/.test(cfg.clientId)) { authErr(t("authNotReady")); return; }
+  if (!cfg.clientId || /REPLACE_WITH/.test(cfg.clientId)) { authErr(t(navigator.onLine === false ? "authOffline" : "authNotReady")); return; }
   try { await loadGis(); } catch (e) { authErr(t("authGisFail")); return; }
   google.accounts.id.initialize({
     client_id: cfg.clientId, ux_mode: "popup", auto_select: false, use_fedcm_for_prompt: true,
@@ -45,7 +43,7 @@ async function showLogin() {
 (async () => {
   if (window.claude && typeof window.claude.use === "function") { startApp(); return; }   // claude.ai artifact preview: no server, guest only
   let who;
-  try { who = await boot(getLocalFile); } catch (e) { who = { needLogin: true }; }
+  try { who = await boot(getLocalFile, clearFiles); } catch (e) { who = { needLogin: true }; }
   if (who.needLogin) { showLogin(); return; }
   startApp();
 })();

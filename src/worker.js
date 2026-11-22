@@ -170,6 +170,12 @@ async function api(req, env, url) {
     const keys = {}; for (const r of results) keys[r.k] = { v: r.v, updated: r.updated };
     return json({ keys, files: files ? files.n : 0 });
   }
+  // delete everything of this user (data, files, shared items)
+  if (path === "/api/data" && method === "DELETE") {
+    await env.DB.batch(["kv", "files"].map(tb => env.DB.prepare(`DELETE FROM ${tb} WHERE user_id = ?`).bind(user.id))
+      .concat(["shared", "shared_files"].map(tb => env.DB.prepare(`DELETE FROM ${tb} WHERE owner_id = ?`).bind(user.id))));
+    return json({ ok: true });
+  }
   // upsert some keys: {keys: {k: "<json string>"}}
   if (path === "/api/data" && method === "POST") {
     const body = await req.json().catch(() => null);
