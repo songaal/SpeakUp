@@ -48,7 +48,8 @@ let nav = { t: null, p: null, c: null, it: null };
 const trainingOf = () => meta.trainings.find(x => x.id === nav.t);
 const partOf = () => { const tr = trainingOf(); return tr && tr.parts.find(x => x.id === nav.p); };
 const chapterOf = () => { const p = partOf(); return p && p.chapters.find(x => x.id === nav.c); };
-const level = () => nav.it != null ? "item" : nav.c ? "chapter" : nav.p ? "part" : "training";
+// v3.20: no separate part page — the training page lists every part (as a section header) with its chapters
+const level = () => nav.it != null ? "item" : nav.c ? "chapter" : "training";
 const byNo = (a, b) => (a.no - b.no) || (a.created - b.created);
 const bestKey = (cid, ii, q) => `${cid}|${ii}|${q.key}`;
 function itemStats(cid, ii, it) {
@@ -100,7 +101,7 @@ function go(dir = "fwd") {
 }
 function back() {
   const l = level();
-  if (l === "item") nav.it = null; else if (l === "chapter") nav.c = null; else if (l === "part") nav.p = null;
+  if (l === "item") nav.it = null; else if (l === "chapter") { nav.c = null; nav.p = null; }
   else { transition(() => { C.showView("lib"); C.renderLib(); }); return; }
   go("back");
 }
@@ -113,23 +114,20 @@ async function renderSx() {
   const fab = $("sxFab"); fab.style.display = "none";
   if (l === "training") {
     $("sxTitle").textContent = tr.title;
-    const parts = [...tr.parts].sort(byNo);
-    body.innerHTML = parts.length ? parts.map(pt => `<div class="dcard sxcard" data-pid="${pt.id}">
-        <span class="nobadge part"><small>PART</small>${esc(pt.no)}</span>
-        <div class="dmain"><div class="dt">${esc(pt.title)}</div><div class="dm">${t("sxChapters", pt.chapters.length)}</div></div><span class="chev">›</span></div>`).join("")
-      : emptyHint("📚", t("sxNoParts"));
-    body.querySelectorAll("[data-pid]").forEach(c => c.onclick = () => { nav.p = c.dataset.pid; go(); });
+    const parts = [...tr.parts].sort(byNo), chs = [];
+    body.innerHTML = parts.length ? parts.map(pt => {
+      const list = [...pt.chapters].sort(byNo); list.forEach(c => chs.push(c));
+      return `<div class="psec"><div class="psec-h"><span class="pbadge">PART ${esc(pt.no)}</span><b>${esc(pt.title)}</b><button class="psec-ed" data-pedit="${pt.id}" aria-label="${esc(t("sxEditPart"))}">✎</button></div>
+        ${list.map(c => `<div class="dcard sxcard" data-cid="${c.id}" data-pc="${pt.id}">
+          <span class="nobadge"><small>CH</small>${esc(c.no)}</span>
+          <div class="dmain"><div class="dt">${esc(c.title)}</div><div class="dm" data-cmeta="${c.id}">${esc(c.file || "")}</div></div>
+          <span class="cring" data-cring="${c.id}"></span><span class="chev">›</span></div>`).join("")}
+        <button class="addch" data-padd="${pt.id}">＋ ${t("sxNewChapter")}</button></div>`;
+    }).join("") : emptyHint("📚", t("sxNoParts"));
+    body.querySelectorAll("[data-cid]").forEach(c => c.onclick = () => { nav.p = c.dataset.pc; nav.c = c.dataset.cid; go(); });
+    body.querySelectorAll("[data-pedit]").forEach(b => b.onclick = e => { e.stopPropagation(); editPart(tr.parts.find(x => x.id === b.dataset.pedit)); });
+    body.querySelectorAll("[data-padd]").forEach(b => b.onclick = () => newChapter(tr.parts.find(x => x.id === b.dataset.padd)));
     fab.style.display = ""; $("sxFabLbl").textContent = t("sxNewPart"); fab.onclick = newPart;
-  } else if (l === "part") {
-    $("sxTitle").textContent = `PART ${p.no}. ${p.title}`;
-    const chs = [...p.chapters].sort(byNo);
-    body.innerHTML = chs.length ? chs.map(c => `<div class="dcard sxcard" data-cid="${c.id}">
-        <span class="nobadge"><small>CH</small>${esc(c.no)}</span>
-        <div class="dmain"><div class="dt">${esc(c.title)}</div><div class="dm" data-cmeta="${c.id}">${esc(c.file || "")}</div></div>
-        <span class="cring" data-cring="${c.id}"></span><span class="chev">›</span></div>`).join("")
-      : emptyHint("📄", t("sxNoChapters"));
-    body.querySelectorAll("[data-cid]").forEach(c => c.onclick = () => { nav.c = c.dataset.cid; go(); });
-    fab.style.display = ""; $("sxFabLbl").textContent = t("sxNewChapter"); fab.onclick = newChapter;
     for (const c of chs) {   // fill unit counts / progress once the files are read
       loadChapter(c).then(d => {
         const units = d.items.map((it, i) => [it, i]).filter(([it]) => it.kind === "unit");
@@ -220,8 +218,8 @@ function newPart() {
     },
   });
 }
-function newChapter() {
-  const p = partOf(), next = p.chapters.reduce((a, c) => Math.max(a, +c.no || 0), 0) + 1;
+function newChapter(p) {
+  const next = p.chapters.reduce((a, c) => Math.max(a, +c.no || 0), 0) + 1;
   openForm({
     title: t("sxNewChapter"), submit: t("sxCreate"),
     fields: [{ name: "file", label: t("sxJsonFile"), type: "file" }, { name: "no", label: t("sxChapterNo"), type: "number", value: next }, { name: "title", label: t("sxChapterTitle"), type: "text", ph: t("sxChapterPh") }],
@@ -247,16 +245,22 @@ function editCurrent() {
       nav = { t: null, p: null, c: null, it: null }; C.showView("lib"); C.renderLib(); C.toast(t("deleted"));
     },
   });
-  else if (l === "part") openForm({
+  else if (l === "chapter") editChapter(tr, p, ch);
+}
+function editPart(p) {
+  const tr = trainingOf();
+  openForm({
     title: t("sxEditPart"), submit: t("save"),
     fields: [{ name: "no", label: t("sxPartNo"), type: "number", value: p.no }, { name: "title", label: t("sxPartTitle"), type: "text", value: p.title }],
     onSubmit: v => { if (!v.no) return t("sxNeedNo"); if (!v.title) return t("sxNeedTitle"); p.no = +v.no; p.title = v.title; saveMeta(); renderSx(); },
     onDelete: async () => {
       if (!await C.ask(t("sxConfirmDelPart", p.no, p.chapters.length))) return false;
-      p.chapters.forEach(dropChapter); tr.parts = tr.parts.filter(x => x !== p); saveMeta(); nav.p = null; renderSx(); C.toast(t("deleted"));
+      p.chapters.forEach(dropChapter); tr.parts = tr.parts.filter(x => x !== p); saveMeta(); renderSx(); C.toast(t("deleted"));
     },
   });
-  else if (l === "chapter") openForm({
+}
+function editChapter(tr, p, ch) {
+  openForm({
     title: t("sxEditChapter"), submit: t("save"),
     fields: [{ name: "file", label: t("sxReplaceFile"), type: "file", current: ch.file }, { name: "no", label: t("sxChapterNo"), type: "number", value: ch.no }, { name: "title", label: t("sxChapterTitle"), type: "text", value: ch.title }],
     onSubmit: async v => {
@@ -266,7 +270,7 @@ function editCurrent() {
     },
     onDelete: async () => {
       if (!await C.ask(t("sxConfirmDelChapter", ch.no, ch.title))) return false;
-      dropChapter(ch); p.chapters = p.chapters.filter(x => x !== ch); saveMeta(); nav.c = null; renderSx(); C.toast(t("deleted"));
+      dropChapter(ch); p.chapters = p.chapters.filter(x => x !== ch); saveMeta(); nav.c = null; nav.p = null; renderSx(); C.toast(t("deleted"));
     },
   });
 }

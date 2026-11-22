@@ -483,3 +483,11 @@
   .tyheard:empty{display:none}
   .tyheard{margin-top:16px}
   .tin.heardok{animation:blkpop .3s cubic-bezier(.3,1.6,.5,1)}
+  /* v3.20: parts as section headers on the training page, chapters listed under them */
+  .psec{margin-bottom:22px}
+  .psec-h{display:flex;align-items:center;gap:10px;margin:2px 2px 10px}
+  .pbadge{flex:none;background:var(--purple-l);color:var(--purple-d);font-weight:900;font-size:12px;letter-spacing:.5px;border-radius:99px;padding:4px 10px}
+  .psec-h b{flex:1;min-width:0;font-size:17px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .psec-ed{flex:none;border:none;background:var(--soft);color:var(--muted);border-radius:10px;width:34px;height:34px;font-size:16px;cursor:pointer}
+  .addch{display:block;width:100%;border:2px dashed var(--line);background:none;border-radius:14px;padding:11px;font:inherit;font-weight:800;font-size:14px;color:var(--muted);cursor:pointer}
+  .addch:active{background:var(--soft)}
